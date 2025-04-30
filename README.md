@@ -38,8 +38,10 @@ A user-friendly GUI application for searching and downloading anime from Hi10Ani
    python setup.py
    ```
 
+### Download Executable (Windows)
+
+You can download the standalone executable file for Windows directly from the [Releases](https://github.com/Kurdeus/hi10anime-dl/releases) page.
+
 ### Building Executable (Windows)
 
 To create a standalone executable for Windows:
-
-
