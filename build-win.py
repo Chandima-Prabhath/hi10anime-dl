@@ -16,10 +16,10 @@ def run_build_win():
         build_script = os.path.join(script_dir, "build-win.cmd")
         
         if not os.path.isfile(build_script):
-            print(f"❌ Error: Build script not found at {build_script}", file=sys.stderr)
+            print(f"Error: Build script not found at {build_script}", file=sys.stderr)
             return False
 
-        print("🚀 Starting Windows build process...")
+        print("Starting Windows build process...")
         
         # Execute build script with real-time output
         process = subprocess.Popen(
@@ -38,17 +38,17 @@ def run_build_win():
         return_code = process.wait()
         
         if return_code == 0:
-            print("✅ Build completed successfully!")
+            print("Build completed successfully!")
             return True
             
-        print(f"❌ Build failed with exit code {return_code}", file=sys.stderr)
+        print(f"Build failed with exit code {return_code}", file=sys.stderr)
         return False
         
     except subprocess.SubprocessError as e:
-        print(f"❌ Build process error: {str(e)}", file=sys.stderr)
+        print(f"Build process error: {str(e)}", file=sys.stderr)
         return False
     except Exception as e:
-        print(f"❌ Unexpected error: {str(e)}", file=sys.stderr)
+        print(f"Unexpected error: {str(e)}", file=sys.stderr)
         return False
 
 if __name__ == "__main__":
