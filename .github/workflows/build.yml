@@ -1,31 +1,32 @@
-name: Build Windows Executable
+name: Build and Release
 
-on: [push, pull_request]
+on:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-latest
-
     steps:
-    - name: Check out code
-      uses: actions/checkout@v2
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build executable
-      run: python build-win.py
+      - name: Build executable
+        run: python build-win.py
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: Hi10-DL
-        path: dist/Hi10-DL.exe
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/Hi10-DL.exe
