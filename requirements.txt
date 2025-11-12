@@ -1,4 +1,4 @@
-PyQt6==6.5.0
+PyQt6==6.7.0
 requests==2.31.0
 beautifulsoup4==4.12.2
 darkdetect==0.8.0

@@ -603,7 +603,7 @@ class LinksWidget(QWidget):
 
     def copy_all_links(self):
         if self.links_list:
-            all_links = ", ".join(self.links_list)
+            all_links = " ".join(self.links_list)
             clipboard = QApplication.clipboard()
             clipboard.setText(all_links)
             
