@@ -499,10 +499,21 @@ class LinksWidget(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.current_theme = parent.current_theme
         
-        # Back button
+        # Top buttons
+        top_button_widget = QWidget()
+        top_button_layout = QHBoxLayout(top_button_widget)
+        top_button_layout.setContentsMargins(0, 0, 0, 0)
+
         back_button = QPushButton("Back to Search")
         back_button.clicked.connect(self.go_back)
-        self.layout.addWidget(back_button)
+        top_button_layout.addWidget(back_button)
+
+        copy_all_button = QPushButton("Copy All Links")
+        copy_all_button.clicked.connect(self.copy_all_links)
+        top_button_layout.addWidget(copy_all_button)
+        top_button_layout.addStretch()
+
+        self.layout.addWidget(top_button_widget)
         
         # Header (will be updated dynamically)
         self.header_label = QLabel("")
@@ -589,6 +600,12 @@ class LinksWidget(QWidget):
 
     def open_link(self, link: str):
         webbrowser.open(link)
+
+    def copy_all_links(self):
+        if self.links_list:
+            all_links = ", ".join(self.links_list)
+            clipboard = QApplication.clipboard()
+            clipboard.setText(all_links)
             
     def go_back(self):
         self.parent.stack.setCurrentWidget(self.parent.search_screen)

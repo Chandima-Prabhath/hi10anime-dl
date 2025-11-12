@@ -1,0 +1,31 @@
+name: Build Windows Executable
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build executable
+      run: python build-win.py
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: Hi10-DL
+        path: dist/Hi10-DL.exe
