@@ -31,30 +31,59 @@ def build():
 
     # If openssl.exe isn't present, try to extract it from openssl.zip if available
     if not os.path.exists(openssl_path):
-        zip_path = os.path.join(project_dir, 'openssl.zip')
-        if os.path.exists(zip_path):
-            print(f"Found '{os.path.basename(zip_path)}'. Extracting and searching for openssl.exe...")
-            tmpdir = tempfile.mkdtemp(prefix='openssl_extract_')
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as z:
-                    z.extractall(tmpdir)
+        # Candidate locations to look for an openssl zip (cwd, project dir, parent, repo root)
+        candidates = []
+        cwd = os.getcwd()
+        candidates.append(os.path.join(cwd, 'openssl.zip'))
+        candidates.append(os.path.join(project_dir, 'openssl.zip'))
+        # parent of project_dir
+        parent = os.path.dirname(project_dir)
+        candidates.append(os.path.join(parent, 'openssl.zip'))
 
-                # Search extracted files for openssl.exe (recursive)
-                matches = glob.glob(os.path.join(tmpdir, '**', 'openssl.exe'), recursive=True)
-                if matches:
-                    found = matches[0]
-                    os.makedirs(openssl_dir, exist_ok=True)
-                    shutil.copy2(found, openssl_path)
-                    print(f"Copied openssl.exe to '{openssl_path}'.")
-                else:
-                    print("Could not find 'openssl.exe' inside the zip archive.")
-            except zipfile.BadZipFile:
-                print("The file 'openssl.zip' is not a valid zip archive.")
-            finally:
+        # Also include any file matching openssl*.zip in project_dir
+        for p in glob.glob(os.path.join(project_dir, 'openssl*.zip')):
+            candidates.append(p)
+
+        checked = []
+        found_and_copied = False
+        for zip_path in candidates:
+            if not zip_path:
+                continue
+            checked.append(zip_path)
+            if os.path.exists(zip_path):
+                print(f"Found zip at: {zip_path}. Extracting and searching for openssl.exe...")
+                tmpdir = tempfile.mkdtemp(prefix='openssl_extract_')
                 try:
-                    shutil.rmtree(tmpdir)
-                except Exception:
-                    pass
+                    try:
+                        with zipfile.ZipFile(zip_path, 'r') as z:
+                            z.extractall(tmpdir)
+                    except zipfile.BadZipFile:
+                        print(f"The file '{zip_path}' is not a valid zip archive. Skipping.")
+                        continue
+
+                    # Search extracted files for openssl.exe (recursive)
+                    matches = glob.glob(os.path.join(tmpdir, '**', 'openssl.exe'), recursive=True)
+                    if matches:
+                        found = matches[0]
+                        os.makedirs(openssl_dir, exist_ok=True)
+                        shutil.copy2(found, openssl_path)
+                        print(f"Copied openssl.exe from '{found}' to '{openssl_path}'.")
+                        found_and_copied = True
+                        break
+                    else:
+                        print(f"Could not find 'openssl.exe' inside '{zip_path}'.")
+                finally:
+                    try:
+                        shutil.rmtree(tmpdir)
+                    except Exception:
+                        pass
+
+        if not checked:
+            print("No candidate 'openssl.zip' files were found during the search.")
+        else:
+            print("Checked the following zip paths:")
+            for p in checked:
+                print(f" - {p}")
 
     # Check again for openssl.exe and add it to the build if it exists
     if os.path.exists(openssl_path):
