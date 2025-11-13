@@ -1,14 +1,18 @@
 import os
-import winreg
+try:
+    import winreg
+except ImportError:
+    winreg = None
 from typing import Optional, Dict, Set
 import requests
 from bs4 import BeautifulSoup
 from PyQt6.QtWidgets import QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QCheckBox, QComboBox
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QScrollArea
+from PyQt6.QtWidgets import QScrollArea, QTreeWidget, QTreeWidgetItem
 from PyQt6.QtWidgets import QHBoxLayout
 import webbrowser
 import darkdetect
+import re
 
 
 # Domain layer - Core business logic
@@ -162,16 +166,17 @@ class Hi10AnimeClient:
 class ProxyService:
     @staticmethod
     def get_windows_proxy() -> Optional[str]:
-        try:
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
-            ) as key:
-                if winreg.QueryValueEx(key, "ProxyEnable")[0]:
-                    proxy = winreg.QueryValueEx(key, "ProxyServer")[0]
-                    return proxy.split(";")[0] if ";" in proxy else proxy
-        except (OSError, ValueError):
-            return None
+        if winreg:
+            try:
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+                ) as key:
+                    if winreg.QueryValueEx(key, "ProxyEnable")[0]:
+                        proxy = winreg.QueryValueEx(key, "ProxyServer")[0]
+                        return proxy.split(";")[0] if ";" in proxy else proxy
+            except (OSError, ValueError):
+                return None
         return None
 
     @staticmethod
@@ -194,6 +199,77 @@ class ProxyService:
         return None
     
 
+class LinkParser:
+    @staticmethod
+    def parse(links: Set[str]) -> Dict[str, Dict[str, list]]:
+        categorized_links = {}
+
+        for link in links:
+            # Extract filename from the URL
+            try:
+                filename = link.split('/')[-1].split('?')[0]
+            except IndexError:
+                continue
+
+            # Default values
+            season = "Season 1"
+            quality = "Unknown"
+            episode = "N/A"
+            file_type = "MKV"
+
+            # Improved regex to find season/part information
+            season_match = re.search(r'\[(.*?)\]', filename)
+            if season_match:
+                season_text = season_match.group(1)
+                # More robust season detection
+                if "season" in season_text.lower() or re.match(r'S\d+', season_text):
+                    season = season_text
+                elif re.search(r'II|III|IV|V', season_text): # Roman numerals for seasons
+                    season = f"Season {season_text.count('I') + season_text.count('V')*4}"
+                # Add other keywords that could indicate a new season or part
+                elif any(s in season_text for s in ["Part", "Cour", "Book"]):
+                    season = season_text
+
+
+            # Regex to find quality
+            quality_match = re.search(r'(\d{3,4}p)', filename)
+            if quality_match:
+                quality = quality_match.group(1)
+            elif "BD" in filename:
+                quality = "BD"
+
+            # Regex for episode number
+            episode_match = re.search(r' (\d{2,3}) ', filename)
+            if episode_match:
+                episode = episode_match.group(1)
+            elif "NCOP" in filename:
+                episode = "NCOP"
+            elif "NCED" in filename:
+                episode = "NCED"
+
+
+            # Determine file type
+            if ".torrent" in filename:
+                file_type = "Torrent"
+
+            # Build nested dictionary
+            if season not in categorized_links:
+                categorized_links[season] = {}
+            if quality not in categorized_links[season]:
+                categorized_links[season][quality] = []
+
+            categorized_links[season][quality].append({
+                "episode": episode,
+                "file_type": file_type,
+                "link": link
+            })
+
+        # Sort episodes within each quality
+        for season in categorized_links.values():
+            for quality_links in season.values():
+                quality_links.sort(key=lambda x: x["episode"])
+
+        return categorized_links
     
 # Application layer - PyQt6 GUI
 class AnimeSearchApp(QMainWindow):
@@ -207,12 +283,7 @@ class AnimeSearchApp(QMainWindow):
         self.current_theme = self.default_theme
         self.apply_theme()
         
-        # Initialize client with proper error handling
-        try:
-            self.client = Hi10AnimeClient()
-        except Exception as e:
-            print(f"Error initializing client: {e}")
-            self.client = None
+        self.client = None
             
         # Use a stacked widget for navigation between screens
         self.central_widget = QWidget()
@@ -400,10 +471,6 @@ class AnimeSearchApp(QMainWindow):
         self.links_screen.update_theme(theme)
 
     def perform_search(self):
-        if not self.client:
-            self.status_label.setText("Error: Client not initialized")
-            return
-            
         search_term = self.search_input.text()
         if not search_term:
             self.status_label.setText("Please enter a search term")
@@ -415,10 +482,9 @@ class AnimeSearchApp(QMainWindow):
         try:
             use_proxy = self.use_proxy_checkbox.isChecked()
             proxies = ProxyService.get_proxies(use_proxy)
-            if proxies:
-                self.client.session.proxies = proxies
-            else:
-                self.client.session.proxies = {}  # Clear proxies if none found
+
+            # Initialize client here, inside the search function
+            self.client = Hi10AnimeClient(proxies=proxies)
                 
             results = self.client.search(search_term)
             self.display_results(results)
@@ -519,74 +585,104 @@ class LinksWidget(QWidget):
         self.header_label = QLabel("")
         self.header_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if self.current_theme == "Light" else "font-size: 20px; font-weight: bold; color: #eee; margin-bottom: 10px;")
         self.layout.addWidget(self.header_label)
+
+        # Tree widget for categorized links
+        self.links_tree = QTreeWidget()
+        self.links_tree.setHeaderLabels(["File", "Type", "Actions"])
+        self.links_tree.setStyleSheet("""
+            QTreeWidget {
+                border: 1px solid #ddd;
+                background-color: white;
+                border-radius: 4px;
+            }
+            QHeaderView::section {
+                background-color: #f0f0f0;
+                padding: 4px;
+                border: 1px solid #ddd;
+            }
+        """ if self.current_theme == "Light" else """
+            QTreeWidget {
+                border: 1px solid #444;
+                background-color: #3c3c3c;
+                border-radius: 4px;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #2c2c2c;
+                padding: 4px;
+                border: 1px solid #444;
+                color: white;
+            }
+        """)
+        self.layout.addWidget(self.links_tree)
         
-        # Links area with scroll
-        self.links_area = QScrollArea()
-        self.links_area.setWidgetResizable(True)
-        self.links_widget = QWidget()
-        self.links_layout = QVBoxLayout(self.links_widget)
-        self.links_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.links_area.setWidget(self.links_widget)
-        self.links_area.setStyleSheet("border: 1px solid #ddd; background-color: white; border-radius: 4px;" if self.current_theme == "Light" else "border: 1px solid #444; background-color: #3c3c3c; border-radius: 4px;")
-        self.layout.addWidget(self.links_area)
-        
-        self.link_buttons = []
-        self.links_list = []
+        self.categorized_links = {}
 
     def update_theme(self, theme):
         self.current_theme = theme
         self.header_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if theme == "Light" else "font-size: 20px; font-weight: bold; color: #eee; margin-bottom: 10px;")
-        self.links_area.setStyleSheet("border: 1px solid #ddd; background-color: white; border-radius: 4px;" if theme == "Light" else "border: 1px solid #444; background-color: #3c3c3c; border-radius: 4px;")
-        self.display_links(self.links_list)
+        self.links_tree.setStyleSheet("""
+            QTreeWidget {
+                border: 1px solid #ddd;
+                background-color: white;
+                border-radius: 4px;
+            }
+            QHeaderView::section {
+                background-color: #f0f0f0;
+                padding: 4px;
+                border: 1px solid #ddd;
+            }
+        """ if theme == "Light" else """
+            QTreeWidget {
+                border: 1px solid #444;
+                background-color: #3c3c3c;
+                border-radius: 4px;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #2c2c2c;
+                padding: 4px;
+                border: 1px solid #444;
+                color: white;
+            }
+        """)
+        self.display_links()
 
     def setup_links(self, title: str, links: Set[str]):
         self.header_label.setText(f"Download Links for {title}")
-        self.links_list = list(links)
-        self.display_links(self.links_list)
+        self.categorized_links = LinkParser.parse(links)
+        self.display_links()
 
-    def display_links(self, links: list[str]):
-        # Clear previous links
-        for button in self.link_buttons:
-            button.deleteLater()
-        self.link_buttons.clear()
+    def display_links(self):
+        self.links_tree.clear()
         
-        # Clear the layout
-        while self.links_layout.count():
-            item = self.links_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-                
-        if links:
-            for i, link in enumerate(links):
-                link_container = QWidget()
-                link_layout = QHBoxLayout(link_container)
-                
-                link_label = QLabel(f"{i+1}. {link}")
-                link_label.setStyleSheet("font-family: monospace; color: #2196F3; text-decoration: underline;" if self.current_theme == "Light" else "font-family: monospace; color: #4da6ff; text-decoration: underline;")
-                link_label.setCursor(Qt.CursorShape.PointingHandCursor)
-                
-                # Add buttons for copy and open actions
-                copy_button = QPushButton("Copy")
-                copy_button.clicked.connect(self.create_copy_handler(link))
-                copy_button.setStyleSheet("background-color: #4CAF50; color: white; border: none; padding: 4px 8px; border-radius: 2px;")
-                
-                open_button = QPushButton("Open")
-                open_button.clicked.connect(self.create_open_handler(link))
-                open_button.setStyleSheet("background-color: #2196F3; color: white; border: none; padding: 4px 8px; border-radius: 2px;")
-                link_layout.addWidget(copy_button)
-                link_layout.addWidget(open_button)
-                link_layout.addWidget(link_label)
-                
-                link_layout.addStretch()
-                
-                self.links_layout.addWidget(link_container)
-                self.link_buttons.extend([copy_button, open_button])
-        else:
-            no_links_label = QLabel("No links available")
-            no_links_label.setStyleSheet("color: #777; font-style: italic;" if self.current_theme == "Light" else "color: #aaa; font-style: italic;")
-            self.links_layout.addWidget(no_links_label)
-        self.links_layout.addStretch()
+        for season, qualities in self.categorized_links.items():
+            season_item = QTreeWidgetItem(self.links_tree, [season])
+            for quality, episodes in qualities.items():
+                quality_item = QTreeWidgetItem(season_item, [quality])
+                for episode_details in episodes:
+                    link = episode_details['link']
+                    episode_item = QTreeWidgetItem(quality_item, [f"Episode {episode_details['episode']}", episode_details['file_type']])
+                    episode_item.setData(0, Qt.ItemDataRole.UserRole, link)
+
+                    # Actions widget
+                    actions_widget = QWidget()
+                    actions_layout = QHBoxLayout(actions_widget)
+                    actions_layout.setContentsMargins(0, 0, 0, 0)
+
+                    copy_button = QPushButton("Copy")
+                    copy_button.clicked.connect(self.create_copy_handler(link))
+
+                    open_button = QPushButton("Open")
+                    open_button.clicked.connect(self.create_open_handler(link))
+
+                    actions_layout.addWidget(copy_button)
+                    actions_layout.addWidget(open_button)
+                    actions_layout.addStretch()
+
+                    self.links_tree.setItemWidget(episode_item, 2, actions_widget)
+
+        self.links_tree.expandAll()
         
     def create_copy_handler(self, link: str):
         return lambda: self.copy_link(link)
@@ -602,10 +698,21 @@ class LinksWidget(QWidget):
         webbrowser.open(link)
 
     def copy_all_links(self):
-        if self.links_list:
-            all_links = " ".join(self.links_list)
+        all_links = []
+        root = self.links_tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            season_item = root.child(i)
+            for j in range(season_item.childCount()):
+                quality_item = season_item.child(j)
+                for k in range(quality_item.childCount()):
+                    episode_item = quality_item.child(k)
+                    link = episode_item.data(0, Qt.ItemDataRole.UserRole)
+                    if link:
+                        all_links.append(link)
+
+        if all_links:
             clipboard = QApplication.clipboard()
-            clipboard.setText(all_links)
+            clipboard.setText("\n".join(all_links))
             
     def go_back(self):
         self.parent.stack.setCurrentWidget(self.parent.search_screen)
