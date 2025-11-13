@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from PyQt6.QtWidgets import QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QTextEdit, QCheckBox, QComboBox
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QScrollArea, QTreeWidget, QTreeWidgetItem
 from PyQt6.QtWidgets import QHBoxLayout
 import webbrowser
@@ -277,6 +278,7 @@ class AnimeSearchApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Hi10Anime  DL")
         self.setGeometry(100, 100, 900, 700)  # Larger window size for better layout
+        self.setWindowIcon(QIcon("app.ico"))
         
         # Determine default theme based on system preference
         self.default_theme = "Dark" if darkdetect.isDark() else "Light"

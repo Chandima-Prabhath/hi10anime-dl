@@ -24,7 +24,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build executable
-        run: python build-win.py
+        run: build-win.cmd
 
       - name: Release
         uses: softprops/action-gh-release@v1
