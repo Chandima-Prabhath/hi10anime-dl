@@ -25,7 +25,7 @@ jobs:
 
       - name: Download and extract OpenSSL
         run: |
-          curl -L "https://deac-ams.dl.sourceforge.net/project/openssl-for-windows/OpenSSL-1.1.1h_win32%28static%29%5BNo-GOST%5D.zip" -o openssl.zip
+          curl -L "https://cyfuture.dl.sourceforge.net/project/openssl-for-windows/OpenSSL-1.1.1h_win32%28static%29%5BNo-GOST%5D.zip?viasf=1" -o openssl.zip
           7z x openssl.zip -oopenssl
           del openssl.zip
 
