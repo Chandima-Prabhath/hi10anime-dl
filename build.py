@@ -21,6 +21,9 @@ def build():
         '--onefile',
         '--noconsole',
         '--icon=app.ico',
+        # Include the app.ico file as packaged data so it's available at runtime
+        '--add-data',
+        f'app.ico{os.pathsep}.',
         '--hidden-import', 'PyQt6.QtNetwork'
     ]
 

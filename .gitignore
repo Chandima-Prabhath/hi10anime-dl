@@ -5,3 +5,5 @@ __pycache__
 .DS_Store
 dist
 build
+Hi10-DL.spec
+setup.spec

@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox, QScrollArea, QTreeWidget, QTreeWidgetItem, QHBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
+import sys
+from pathlib import Path
 import webbrowser
 import darkdetect
 
@@ -15,7 +17,12 @@ class AnimeSearchApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Hi10Anime  DL")
         self.setGeometry(100, 100, 900, 700)
-        self.setWindowIcon(QIcon("app.ico"))
+        # Resolve icon path relative to the executable or project root.
+        # When bundled by PyInstaller, resources are in sys._MEIPASS.
+        base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
+        icon_path = base_path / 'app.ico'
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         self.default_theme = "Dark" if darkdetect.isDark() else "Light"
         self.current_theme = self.default_theme
