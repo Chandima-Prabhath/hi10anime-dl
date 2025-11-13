@@ -23,13 +23,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Download and extract OpenSSL
+        run: |
+          curl -L "https://deac-ams.dl.sourceforge.net/project/openssl-for-windows/OpenSSL-1.1.1h_win32%28static%29%5BNo-GOST%5D.zip" -o openssl.zip
+          7z x openssl.zip -oopenssl
+          del openssl.zip
+
       - name: Build executable
-        run: build-win.cmd
+        run: python build.py
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: dist/Hi10-DL.exe
-
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
