@@ -552,7 +552,7 @@ class LinksWidget(QWidget):
 class AnimeSearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Hi10Anime DL v{__version__}")
+        self.setWindowTitle(f"Hi10Anime DL v{__version__.lstrip('v')}")
         self.setGeometry(100, 100, 1000, 800)
         
         self.base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
