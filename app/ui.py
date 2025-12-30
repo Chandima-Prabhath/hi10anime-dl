@@ -385,6 +385,31 @@ class LinksWidget(QWidget):
             season_item = QTreeWidgetItem(self.links_tree, [season])
             for quality, episodes in qualities.items():
                 quality_item = QTreeWidgetItem(season_item, [quality])
+                
+                # Add Copy All button for Quality
+                width_widget = QWidget()
+                width_layout = QHBoxLayout(width_widget)
+                width_layout.setContentsMargins(0, 0, 0, 0)
+                width_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                
+                copy_all_btn = QPushButton("Copy All")
+                copy_all_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2196F3;
+                        color: white;
+                        border: none;
+                        padding: 4px 8px;
+                        border-radius: 3px;
+                        font-size: 11px;
+                    }
+                    QPushButton:hover {
+                        background-color: #1976D2;
+                    }
+                """)
+                copy_all_btn.clicked.connect(self.create_copy_quality_handler(episodes))
+                width_layout.addWidget(copy_all_btn)
+                self.links_tree.setItemWidget(quality_item, 2, width_widget)
+
                 for episode_details in episodes:
                     link = episode_details['link']
                     label = f"Episode {episode_details['episode']}"
@@ -412,6 +437,17 @@ class LinksWidget(QWidget):
                     self.links_tree.setItemWidget(episode_item, 2, actions_widget)
 
         self.links_tree.expandAll()
+
+    def create_copy_quality_handler(self, episodes: list):
+        return lambda: self.copy_quality_links(episodes)
+
+    def copy_quality_links(self, episodes: list):
+        links = [ep['link'] for ep in episodes]
+        if links:
+            clipboard = QApplication.clipboard()
+            clipboard.setText("\n".join(links))
+            # Optional: Show a small toast or status update?
+            # For now, just copy.
 
     def create_copy_handler(self, link: str):
         return lambda: self.copy_link(link)
