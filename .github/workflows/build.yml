@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build-and-release:
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Install dependencies
         run: |
@@ -30,9 +30,14 @@ jobs:
       - name: Build executable
         run: python build.py
 
+      - name: Rename executable logic
+        run: |
+          cd dist
+          mv Hi10-DL.exe Hi10-DL-${{ github.ref_name }}.exe
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/Hi10-DL.exe
+          files: dist/Hi10-DL-${{ github.ref_name }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
