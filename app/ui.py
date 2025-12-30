@@ -387,7 +387,12 @@ class LinksWidget(QWidget):
                 quality_item = QTreeWidgetItem(season_item, [quality])
                 for episode_details in episodes:
                     link = episode_details['link']
-                    episode_item = QTreeWidgetItem(quality_item, [f"Episode {episode_details['episode']}", episode_details['file_type']])
+                    label = f"Episode {episode_details['episode']}"
+                    if episode_details['episode'] in ["N/A", "Extras"] or episode_details['file_type'] == "Torrent":
+                         # Use filename but maybe truncated or just the whole thing
+                         label = episode_details['filename']
+
+                    episode_item = QTreeWidgetItem(quality_item, [label, episode_details['file_type']])
                     episode_item.setData(0, Qt.ItemDataRole.UserRole, link)
 
                     actions_widget = QWidget()

@@ -7,3 +7,4 @@ dist
 build
 Hi10-DL.spec
 setup.spec
+tests/verify_output.txt
