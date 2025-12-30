@@ -1,483 +1,526 @@
-from PyQt6.QtWidgets import QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox, QScrollArea, QTreeWidget, QTreeWidgetItem, QHBoxLayout
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
 import sys
 from pathlib import Path
 import webbrowser
 import darkdetect
+from typing import Set, Dict, Optional, Any
+
+from PyQt6.QtWidgets import (
+    QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, 
+    QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox, QScrollArea, 
+    QTreeWidget, QTreeWidgetItem, QHBoxLayout, QFrame, QGraphicsOpacityEffect,
+    QSizePolicy, QProgressBar, QTreeWidgetItemIterator
+)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QTimer, QPoint
+from PyQt6.QtGui import QIcon, QColor, QFont
 
 from .client import Hi10AnimeClient
 from .proxy import ProxyService
 from .parser import LinkParser
-from typing import Set, Dict
+from .styles import StyleSheet
 
+class WorkerThread(QThread):
+    """
+    Generic worker thread to run blocking tasks.
+    """
+    finished_signal = pyqtSignal(object)  # Emits the result
+    error_signal = pyqtSignal(str)        # Emits error message
+
+    def __init__(self, func, *args, **kwargs):
+        super().__init__()
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+        try:
+            result = self.func(*self.args, **self.kwargs)
+            self.finished_signal.emit(result)
+        except Exception as e:
+            self.error_signal.emit(str(e))
+
+class LoadingOverlay(QWidget):
+    """
+    A semi-transparent overlay with a spinner/text to show loading state.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False) # block mouse
+        self.hide()
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.card = QFrame()
+        self.card.setStyleSheet("background-color: rgba(30, 30, 46, 0.9); border-radius: 12px; padding: 20px;")
+        card_layout = QVBoxLayout(self.card)
+        
+        self.spinner = QProgressBar()
+        self.spinner.setRange(0, 0) # Indeterminate mode
+        self.spinner.setFixedWidth(200)
+        self.spinner.setTextVisible(False)
+        self.spinner.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #45475a;
+                border-radius: 5px;
+                background-color: transparent;
+            }
+            QProgressBar::chunk {
+                background-color: #89b4fa;
+                width: 20px; 
+            }
+        """)
+
+        self.label = QLabel("Loading...")
+        self.label.setStyleSheet("color: white; font-size: 16px; font-weight: bold; margin-top: 10px;")
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card_layout.addWidget(self.spinner)
+        card_layout.addWidget(self.label)
+        layout.addWidget(self.card)
+
+    def show_loading(self, text="Loading..."):
+        self.label.setText(text)
+        self.resize(self.parent().size())
+        self.show()
+        self.raise_()
+
+    def stop(self):
+        self.hide()
+
+class ToastNotification(QFrame):
+    """
+    Non-intrusive popup notification.
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #313244; 
+                color: #cdd6f4; 
+                border-radius: 8px; 
+                border: 1px solid #45475a;
+                padding: 10px 20px;
+            }
+        """)
+        self.label = QLabel(self)
+        self.label.setStyleSheet("border: none; background: transparent; color: #cdd6f4; font-weight: 600;")
+        
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.label)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+        
+        self.anim = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.fade_out)
+        self.hide()
+
+    def show_message(self, message, duration=2500):
+        self.label.setText(message)
+        self.adjustSize()
+        
+        # Position at bottom center
+        parent_geo = self.parent().geometry()
+        x = (parent_geo.width() - self.width()) // 2
+        y = parent_geo.height() - self.height() - 50
+        self.move(x, y)
+        
+        self.show()
+        self.raise_()
+        self.opacity_effect.setOpacity(1.0)
+        self.timer.start(duration)
+
+    def fade_out(self):
+        self.anim.setDuration(500)
+        self.anim.setStartValue(1.0)
+        self.anim.setEndValue(0.0)
+        self.anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+        self.anim.finished.connect(self.hide)
+        self.anim.start()
 
 class AnimeSearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Hi10Anime  DL")
-        self.setGeometry(100, 100, 900, 700)
-        # Resolve icon path relative to the executable or project root.
-        # When bundled by PyInstaller, resources are in sys._MEIPASS.
+        self.setWindowTitle("Hi10Anime DL")
+        self.setGeometry(100, 100, 1000, 750)
+        
+        # Set Icon
         base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
         icon_path = base_path / 'app.ico'
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        self.default_theme = "Dark" if darkdetect.isDark() else "Light"
+        # Theme Init
+        self.default_theme = "Dark" # Default to Dark for modern feel
+        if not darkdetect.isDark():
+            self.default_theme = "Light" 
         self.current_theme = self.default_theme
+
+        # Data
+        self.client = None
+        self.worker = None
+
+        # UI Init
+        self.setup_ui()
         self.apply_theme()
 
-        self.client = None
-
+    def setup_ui(self):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
+        
         self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setSpacing(10)
-        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
+        # Content Stack
         self.stack = QStackedWidget()
-        self.main_layout.addWidget(self.stack)
-
+        
         self.search_screen = QWidget()
+        self.setup_search_screen()
+        
         self.links_screen = LinksWidget(self)
+        
         self.stack.addWidget(self.search_screen)
         self.stack.addWidget(self.links_screen)
+        
+        self.main_layout.addWidget(self.stack)
 
-        self.setup_search_screen()
-
-        self.result_buttons = []
-        self.link_buttons = []
-
-        self.header_label = None
-
-    def apply_theme(self):
-        if self.current_theme == "Dark":
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #2c2c2c;
-                }
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    text-align: center;
-                    font-size: 14px;
-                    margin: 4px 2px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-                QLineEdit {
-                    padding: 8px;
-                    font-size: 14px;
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    background-color: #3c3c3c;
-                    color: white;
-                }
-                QLabel {
-                    font-size: 14px;
-                    color: #eee;
-                }
-                QCheckBox {
-                    font-size: 14px;
-                    color: #eee;
-                }
-                QComboBox {
-                    padding: 8px;
-                    font-size: 14px;
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    background-color: #3c3c3c;
-                    color: white;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                }
-                QComboBox QAbstractItemView {
-                    background-color: #3c3c3c;
-                    color: white;
-                    border: 1px solid #555;
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #f0f0f0;
-                }
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    text-align: center;
-                    font-size: 14px;
-                    margin: 4px 2px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-                QLineEdit {
-                    padding: 8px;
-                    font-size: 14px;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                }
-                QLabel {
-                    font-size: 14px;
-                    color: #333;
-                }
-                QCheckBox {
-                    font-size: 14px;
-                }
-                QComboBox {
-                    padding: 8px;
-                    font-size: 14px;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                }
-            """)
+        # Overlays
+        self.loading_overlay = LoadingOverlay(self.central_widget)
+        self.toast = ToastNotification(self.central_widget)
 
     def setup_search_screen(self):
-        self.search_layout = QVBoxLayout(self.search_screen)
-        self.search_layout.setSpacing(10)
-        self.search_layout.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(self.search_screen)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(20)
 
-        self.header_label = QLabel("Hi10Anime Download Tool")
-        self.header_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if self.current_theme == "Light" else "font-size: 24px; font-weight: bold; color: #eee; margin-bottom: 10px;")
-        self.search_layout.addWidget(self.header_label)
+        # Header
+        header_container = QWidget()
+        header_layout = QHBoxLayout(header_container)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.header_label = QLabel("Hi10Anime DL")
+        self.header_label.setObjectName("headerTitle")
+        
+        self.theme_selector = QComboBox()
+        self.theme_selector.addItems(["Dark", "Light"])
+        self.theme_selector.setCurrentText(self.current_theme)
+        self.theme_selector.setFixedWidth(100)
+        self.theme_selector.currentTextChanged.connect(self.change_theme)
+        
+        header_layout.addWidget(self.header_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.theme_selector)
+        
+        layout.addWidget(header_container)
 
-        search_container = QWidget()
-        search_layout = QHBoxLayout(search_container)
-        self.search_label = QLabel("Enter anime title:")
+        # Search Bar Area
+        search_card = QFrame()
+        search_card.setObjectName("resultCard") # Reusing card style
+        search_layout = QHBoxLayout(search_card)
+        search_layout.setContentsMargins(20, 20, 20, 20)
+        
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Type anime name here...")
-        search_layout.addWidget(self.search_label)
-        search_layout.addWidget(self.search_input)
-        self.search_layout.addWidget(search_container)
-
-        options_container = QWidget()
-        options_layout = QHBoxLayout(options_container)
+        self.search_input.setPlaceholderText("Search for anime... (e.g., 'One Piece')")
+        self.search_input.returnPressed.connect(self.perform_search)
+        
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.perform_search)
+        self.search_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
         self.use_proxy_checkbox = QCheckBox("Use Proxy")
         self.use_proxy_checkbox.setChecked(True)
+        self.use_proxy_checkbox.setToolTip("Enable if you have connection issues")
 
-        self.theme_selector = QComboBox()
-        self.theme_selector.addItems(["Light", "Dark"])
-        self.theme_selector.setCurrentText(self.default_theme)
-        self.theme_selector.currentTextChanged.connect(self.change_theme)
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.use_proxy_checkbox)
+        search_layout.addWidget(self.search_button)
+        
+        layout.addWidget(search_card)
 
-        self.search_button = QPushButton("Search Anime")
-        self.search_button.clicked.connect(self.perform_search)
-        options_layout.addWidget(self.use_proxy_checkbox)
-        options_layout.addWidget(self.theme_selector)
-        options_layout.addWidget(self.search_button)
-        options_layout.addStretch()
-        self.search_layout.addWidget(options_container)
-
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("font-style: italic; color: #555;" if self.current_theme == "Light" else "font-style: italic; color: #aaa;")
-        self.search_layout.addWidget(self.status_label)
-
-        self.results_area = QScrollArea()
-        self.results_area.setWidgetResizable(True)
+        # Results Area
+        self.results_scroll = QScrollArea()
+        self.results_scroll.setWidgetResizable(True)
         self.results_widget = QWidget()
         self.results_layout = QVBoxLayout(self.results_widget)
         self.results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.results_area.setWidget(self.results_widget)
-        self.results_area.setStyleSheet("border: 1px solid #ddd; background-color: white; border-radius: 4px;" if self.current_theme == "Light" else "border: 1px solid #444; background-color: #3c3c3c; border-radius: 4px;")
-        self.search_layout.addWidget(self.results_area)
+        self.results_layout.setSpacing(10)
+        
+        self.results_scroll.setWidget(self.results_widget)
+        layout.addWidget(self.results_scroll)
+
+    def apply_theme(self):
+        self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
+        # Pass theme down if needed to custom components, though Stylesheet handles most globally
 
     def change_theme(self, theme):
         self.current_theme = theme
         self.apply_theme()
-        if self.header_label:
-            self.header_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if theme == "Light" else "font-size: 24px; font-weight: bold; color: #eee; margin-bottom: 10px;")
-        self.status_label.setStyleSheet("font-style: italic; color: #555;" if theme == "Light" else "font-style: italic; color: #aaa;")
-        self.results_area.setStyleSheet("border: 1px solid #ddd; background-color: white; border-radius: 4px;" if theme == "Light" else "border: 1px solid #444; background-color: #3c3c3c; border-radius: 4px;")
-        self.links_screen.update_theme(theme)
+        if hasattr(self, 'links_screen'):
+            self.links_screen.update_icons(theme)
+
+    def resizeEvent(self, event):
+        # Resize overlay when window resizes
+        if hasattr(self, 'loading_overlay'):
+             self.loading_overlay.resize(self.central_widget.size())
+        super().resizeEvent(event)
 
     def perform_search(self):
-        search_term = self.search_input.text()
-        if not search_term:
-            self.status_label.setText("Please enter a search term")
+        term = self.search_input.text().strip()
+        if not term:
+            self.toast.show_message("Please enter a search term!")
             return
 
-        self.status_label.setText(f"Searching for: {search_term}...")
-        QApplication.processEvents()
-
-        try:
-            use_proxy = self.use_proxy_checkbox.isChecked()
-            proxies = ProxyService.get_proxies(use_proxy)
-
-            self.client = Hi10AnimeClient(proxies=proxies)
-
-            results = self.client.search(search_term)
-            self.display_results(results)
-            self.status_label.setText(f"Found {len(results)} results")
-        except Exception as e:
-            self.status_label.setText(f"Search error: {str(e)}")
-            print(f"Search error details: {e}")
-
-    def display_results(self, results: list[Dict[str, str]]):
-        for button in self.result_buttons:
-            button.deleteLater()
-        self.result_buttons.clear()
-
+        self.results_layout.removeWidget(self.results_widget) # Clear hack
+        # Proper clear
         while self.results_layout.count():
-            item = self.results_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+            child = self.results_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
-        if results:
-            for i, result in enumerate(results):
-                try:
-                    title = result.get('title', 'Unknown Title')
-                    url = result.get('url', '')
+        self.loading_overlay.show_loading(f"Searching for '{term}'...")
+        
+        # Prepare Worker
+        use_proxy = self.use_proxy_checkbox.isChecked()
+        proxies = ProxyService.get_proxies(use_proxy)
+        
+        # If client not init or proxies changed, re-init. 
+        # For simplicity, we can just create a fresh client or re-use.
+        # Let's create a client wrapper function for the thread.
+        
+        self.worker = WorkerThread(self._search_task, term, proxies)
+        self.worker.finished_signal.connect(self.on_search_finished)
+        self.worker.error_signal.connect(self.on_thread_error)
+        self.worker.start()
 
-                    if not url:
-                        continue
+    def _search_task(self, term, proxies):
+        # Initialize client here to run in thread? 
+        # Requests Session is not thread class friendly sometimes if shared, 
+        # but creating new one is fine.
+        client = Hi10AnimeClient(proxies=proxies)
+        self.client = client # Cache it for later use (link fetching)
+        return client.search(term)
 
-                    result_container = QWidget()
-                    result_layout = QHBoxLayout(result_container)
-                    view_links_button = QPushButton(f"{i+1}. {title}")
-                    view_links_button.setStyleSheet("background-color: transparent; color: #2196F3; text-align: left; border: none; text-decoration: underline;")
-                    view_links_button.clicked.connect(self.create_link_handler(url, title))
-                    result_layout.addWidget(view_links_button)
-                    result_layout.addStretch()
-                    self.results_layout.addWidget(result_container)
-                    self.result_buttons.append(view_links_button)
-                except Exception as e:
-                    print(f"Error displaying result {i}: {e}")
-        else:
-            no_results_label = QLabel("No results found")
-            no_results_label.setStyleSheet("color: #777; font-style: italic;" if self.current_theme == "Light" else "color: #aaa; font-style: italic;")
-            self.results_layout.addWidget(no_results_label)
-            self.result_buttons.append(no_results_label)
-        self.results_layout.addStretch()
+    def on_search_finished(self, results):
+        self.loading_overlay.stop()
+        if not results:
+            self.show_no_results()
+            return
+            
+        for result in results:
+            self.add_result_card(result)
 
-    def create_link_handler(self, url, title):
-        return lambda: self.show_links_screen(url, title)
+    def on_thread_error(self, error_msg):
+        self.loading_overlay.stop()
+        self.toast.show_message(f"Error: {error_msg}")
 
-    def show_links_screen(self, url: str, title: str):
-        self.status_label.setText(f"Fetching links for: {title}...")
-        QApplication.processEvents()
+    def show_no_results(self):
+        lbl = QLabel("No anime found. Try a different query.")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet("color: #888; font-size: 16px; margin-top: 20px;")
+        self.results_layout.addWidget(lbl)
 
-        try:
-            links = self.client.get_download_links(url)
-            if links:
-                self.status_label.setText(f"Retrieved {len(links)} links")
-                self.links_screen.setup_links(title, links)
-                self.stack.setCurrentWidget(self.links_screen)
-            else:
-                self.status_label.setText("No links found")
-                print(f"No links found for {url}")
-        except Exception as e:
-            self.status_label.setText(f"Error fetching links: {str(e)}")
-            print(f"Error fetching links for {url}: {e}")
+    def add_result_card(self, result):
+        title = result.get('title', 'Unknown')
+        url = result.get('url', '')
+        
+        card = QFrame()
+        card.setObjectName("resultCard")
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Title
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-size: 16px; font-weight: bold;")
+        
+        layout.addWidget(title_lbl)
+        layout.addStretch()
+        
+        # Icon
+        arrow_lbl = QLabel("→")
+        arrow_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #89b4fa;") # Accent color
+        layout.addWidget(arrow_lbl)
+
+        # Make entire card clickable
+        # We can use an event filter or a transparent button on top, 
+        # or just mousePressEvent override if we subclass QFrame.
+        # Simpler: Button disguised as transparent overlay
+        # Or just a button inside. simpler to just use mouseRelease
+        
+        # Let's use a button overlay
+        overlay_btn = QPushButton(card)
+        overlay_btn.setStyleSheet("background: transparent; border: none;")
+        overlay_btn.resize(card.size()) # Initial size, needs resize event ideally
+        # Hack: layout ensures size? No overlay is absolute.
+        # Better: Standard button taking full space?
+        # Let's actually Just use a custom widget signal.
+        
+        # For valid Clickable frame:
+        card.mouseReleaseEvent = lambda e: self.fetch_links(url, title)
+        
+        self.results_layout.addWidget(card)
+
+    def fetch_links(self, url, title):
+        self.loading_overlay.show_loading(f"Fetching links for {title}...")
+        
+        self.worker = WorkerThread(self.client.get_download_links, url)
+        self.worker.finished_signal.connect(lambda links: self.on_links_fetched(links, title, url))
+        self.worker.error_signal.connect(self.on_thread_error)
+        self.worker.start()
+
+    def on_links_fetched(self, links, title, url):
+        self.loading_overlay.stop()
+        if not links:
+            self.toast.show_message("No download links found for this anime.")
+            return
+            
+        self.links_screen.setup_links(title, links)
+        self.stack.setCurrentWidget(self.links_screen)
 
 
 class LinksWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
-        self.parent = parent
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(10)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.current_theme = parent.current_theme
+        self.parent_app = parent
+        self.setup_ui()
 
-        top_button_widget = QWidget()
-        top_button_layout = QHBoxLayout(top_button_widget)
-        top_button_layout.setContentsMargins(0, 0, 0, 0)
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(15)
 
-        back_button = QPushButton("Back to Search")
-        back_button.clicked.connect(self.go_back)
-        top_button_layout.addWidget(back_button)
+        # Top Bar
+        top_bar = QHBoxLayout()
+        
+        self.back_btn = QPushButton("Back")
+        self.back_btn.setObjectName("secondaryBtn")
+        self.back_btn.setFixedWidth(100)
+        self.back_btn.clicked.connect(self.go_back)
+        
+        self.title_lbl = QLabel("Anime Title")
+        self.title_lbl.setObjectName("subTitle")
+        self.title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.copy_all_btn = QPushButton("Copy All Links")
+        self.copy_all_btn.setFixedWidth(120)
+        self.copy_all_btn.clicked.connect(self.copy_all)
 
-        copy_all_button = QPushButton("Copy All Links")
-        copy_all_button.clicked.connect(self.copy_all_links)
-        top_button_layout.addWidget(copy_all_button)
-        top_button_layout.addStretch()
+        top_bar.addWidget(self.back_btn)
+        top_bar.addWidget(self.title_lbl, 1) # stretch
+        top_bar.addWidget(self.copy_all_btn)
+        
+        layout.addLayout(top_bar)
 
-        self.layout.addWidget(top_button_widget)
+        # Tree View
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["File Name / Episode", "Format", "Actions"])
+        # Set column widths
+        self.tree.setColumnWidth(0, 400)
+        self.tree.setColumnWidth(1, 100)
+        layout.addWidget(self.tree)
 
-        self.header_label = QLabel("")
-        self.header_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if self.current_theme == "Light" else "font-size: 20px; font-weight: bold; color: #eee; margin-bottom: 10px;")
-        self.layout.addWidget(self.header_label)
+    def update_icons(self, theme):
+        # Could update specific icons here if needed
+        pass
 
-        self.links_tree = QTreeWidget()
-        self.links_tree.setHeaderLabels(["File", "Type", "Actions"])
-        self.links_tree.setStyleSheet("""
-            QTreeWidget {
-                border: 1px solid #ddd;
-                background-color: white;
-                border-radius: 4px;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 4px;
-                border: 1px solid #ddd;
-            }
-        """ if self.current_theme == "Light" else """
-            QTreeWidget {
-                border: 1px solid #444;
-                background-color: #3c3c3c;
-                border-radius: 4px;
-                color: white;
-            }
-            QHeaderView::section {
-                background-color: #2c2c2c;
-                padding: 4px;
-                border: 1px solid #444;
-                color: white;
-            }
-        """)
-        self.layout.addWidget(self.links_tree)
-
-        self.categorized_links = {}
-
-    def update_theme(self, theme):
-        self.current_theme = theme
-        self.header_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;" if theme == "Light" else "font-size: 20px; font-weight: bold; color: #eee; margin-bottom: 10px;")
-        self.links_tree.setStyleSheet("""
-            QTreeWidget {
-                border: 1px solid #ddd;
-                background-color: white;
-                border-radius: 4px;
-            }
-            QHeaderView::section {
-                background-color: #f0f0f0;
-                padding: 4px;
-                border: 1px solid #ddd;
-            }
-        """ if theme == "Light" else """
-            QTreeWidget {
-                border: 1px solid #444;
-                background-color: #3c3c3c;
-                border-radius: 4px;
-                color: white;
-            }
-            QHeaderView::section {
-                background-color: #2c2c2c;
-                padding: 4px;
-                border: 1px solid #444;
-                color: white;
-            }
-        """)
-        self.display_links()
-
-    def setup_links(self, title: str, links: Set[str]):
-        self.header_label.setText(f"Download Links for {title}")
-        self.categorized_links = LinkParser.parse(links)
-        self.display_links()
-
-    def display_links(self):
-        self.links_tree.clear()
-
-        for season, qualities in self.categorized_links.items():
-            season_item = QTreeWidgetItem(self.links_tree, [season])
+    def setup_links(self, title, links):
+        self.title_lbl.setText(title)
+        self.tree.clear()
+        
+        categorized = LinkParser.parse(links)
+        
+        for season, qualities in categorized.items():
+            season_item = QTreeWidgetItem(self.tree, [season])
+            season_item.setExpanded(True)
+            
             for quality, episodes in qualities.items():
                 quality_item = QTreeWidgetItem(season_item, [quality])
+                quality_item.setExpanded(True)
                 
-                # Add Copy All button for Quality
-                width_widget = QWidget()
-                width_layout = QHBoxLayout(width_widget)
-                width_layout.setContentsMargins(0, 0, 0, 0)
-                width_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-                
-                copy_all_btn = QPushButton("Copy All")
-                copy_all_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #2196F3;
-                        color: white;
-                        border: none;
-                        padding: 4px 8px;
-                        border-radius: 3px;
-                        font-size: 11px;
-                    }
-                    QPushButton:hover {
-                        background-color: #1976D2;
-                    }
+                # Copy All Quality Button (Cell Widget)
+                copy_q_btn = QPushButton("Copy Quality")
+                copy_q_btn.setObjectName("secondaryBtn")
+                copy_q_btn.setFixedSize(100, 24)
+                copy_q_btn.setStyleSheet("""
+                    QPushButton { padding: 0px 5px; font-size: 11px; }
                 """)
-                copy_all_btn.clicked.connect(self.create_copy_quality_handler(episodes))
-                width_layout.addWidget(copy_all_btn)
-                self.links_tree.setItemWidget(quality_item, 2, width_widget)
+                copy_q_btn.clicked.connect(lambda checked, eps=episodes: self.copy_list([e['link'] for e in eps]))
+                
+                # Container for button to center/align it
+                q_widget = QWidget()
+                q_layout = QHBoxLayout(q_widget)
+                q_layout.setContentsMargins(0,0,0,0)
+                q_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                q_layout.addWidget(copy_q_btn)
+                
+                self.tree.setItemWidget(quality_item, 2, q_widget)
 
-                for episode_details in episodes:
-                    link = episode_details['link']
-                    label = f"Episode {episode_details['episode']}"
-                    if episode_details['episode'] in ["N/A", "Extras"] or episode_details['file_type'] == "Torrent":
-                         # Use filename but maybe truncated or just the whole thing
-                         label = episode_details['filename']
-
-                    episode_item = QTreeWidgetItem(quality_item, [label, episode_details['file_type']])
-                    episode_item.setData(0, Qt.ItemDataRole.UserRole, link)
-
+                for ep_data in episodes:
+                    name = f"Episode {ep_data['episode']}"
+                    if ep_data['episode'] in ["N/A", "Extras"] or ep_data.get('filename'):
+                        name = ep_data['filename'] if ep_data['filename'] else name
+                    
+                    link = ep_data['link']
+                    item = QTreeWidgetItem(quality_item, [name, ep_data['file_type']])
+                    item.setData(0, Qt.ItemDataRole.UserRole, link)
+                    
+                    # Actions
                     actions_widget = QWidget()
                     actions_layout = QHBoxLayout(actions_widget)
-                    actions_layout.setContentsMargins(0, 0, 0, 0)
-
-                    copy_button = QPushButton("Copy")
-                    copy_button.clicked.connect(self.create_copy_handler(link))
-
-                    open_button = QPushButton("Open")
-                    open_button.clicked.connect(self.create_open_handler(link))
-
-                    actions_layout.addWidget(copy_button)
-                    actions_layout.addWidget(open_button)
+                    actions_layout.setContentsMargins(0, 2, 0, 2)
+                    actions_layout.setSpacing(5)
+                    
+                    copy_btn = QPushButton("Copy")
+                    copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                    copy_btn.setFixedSize(60, 24)
+                    copy_btn.setStyleSheet("font-size: 11px; padding: 0;")
+                    copy_btn.clicked.connect(lambda checked, l=link: self.copy_one(l))
+                    
+                    open_btn = QPushButton("Open")
+                    open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                    open_btn.setObjectName("secondaryBtn")
+                    open_btn.setFixedSize(60, 24)
+                    open_btn.setStyleSheet("font-size: 11px; padding: 0;")
+                    open_btn.clicked.connect(lambda checked, l=link: webbrowser.open(l))
+                    
+                    actions_layout.addWidget(copy_btn)
+                    actions_layout.addWidget(open_btn)
                     actions_layout.addStretch()
-
-                    self.links_tree.setItemWidget(episode_item, 2, actions_widget)
-
-        self.links_tree.expandAll()
-
-    def create_copy_quality_handler(self, episodes: list):
-        return lambda: self.copy_quality_links(episodes)
-
-    def copy_quality_links(self, episodes: list):
-        links = [ep['link'] for ep in episodes]
-        if links:
-            clipboard = QApplication.clipboard()
-            clipboard.setText("\n".join(links))
-            # Optional: Show a small toast or status update?
-            # For now, just copy.
-
-    def create_copy_handler(self, link: str):
-        return lambda: self.copy_link(link)
-
-    def create_open_handler(self, link: str):
-        return lambda: self.open_link(link)
-
-    def copy_link(self, link: str):
-        clipboard = QApplication.clipboard()
-        clipboard.setText(link)
-
-    def open_link(self, link: str):
-        webbrowser.open(link)
-
-    def copy_all_links(self):
-        all_links = []
-        root = self.links_tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            season_item = root.child(i)
-            for j in range(season_item.childCount()):
-                quality_item = season_item.child(j)
-                for k in range(quality_item.childCount()):
-                    episode_item = quality_item.child(k)
-                    link = episode_item.data(0, Qt.ItemDataRole.UserRole)
-                    if link:
-                        all_links.append(link)
-
-        if all_links:
-            clipboard = QApplication.clipboard()
-            clipboard.setText("\n".join(all_links))
+                    
+                    self.tree.setItemWidget(item, 2, actions_widget)
 
     def go_back(self):
-        self.parent.stack.setCurrentWidget(self.parent.search_screen)
+        self.parent_app.stack.setCurrentWidget(self.parent_app.search_screen)
+
+    def copy_one(self, link):
+        cb = QApplication.clipboard()
+        cb.setText(link)
+        self.parent_app.toast.show_message("Link copied to clipboard!")
+
+    def copy_list(self, links):
+        if not links: 
+            return
+        cb = QApplication.clipboard()
+        cb.setText("\n".join(links))
+        self.parent_app.toast.show_message(f"Copied {len(links)} links!")
+
+    def copy_all(self):
+        urls = []
+        iterator = QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            item = iterator.value()
+            link = item.data(0, Qt.ItemDataRole.UserRole)
+            if link:
+                urls.append(link)
+            iterator += 1
+            
+        if urls:
+            self.copy_list(urls)
+        else:
+            self.parent_app.toast.show_message("No links to copy.")
