@@ -83,15 +83,9 @@ class StyleSheet:
                 padding: 8px 16px;
                 font-weight: 600;
             }}
-            /* Light theme buttons text color fix: contrasting with accent? 
-               Usually white text on accent blue is fine. 
-               Let's force white for primary buttons if accent is dark enough.
-            */
             QPushButton {{
                  color: #ffffff;
             }}
-            /* Specific fix for dark text on light buttons if needed. */
-
             QPushButton:hover {{
                 background-color: {c['accent_hover']};
             }}
@@ -188,18 +182,30 @@ class StyleSheet:
                 background-color: {c['surface_alt']};
             }}
             
-            /* Nested Header (Quality) */
-            QPushButton#qualityHeader {{
-                 text-align: left;
-                 padding: 8px 15px;
-                 border: none;
-                 background-color: transparent; /* blend with season container */
-                 font-weight: 600;
-                 color: {c['fg']};
-                 border-left: 3px solid {c['accent']};
+            /* Tabs */
+            QTabWidget::pane {{
+                border: none;
+                background: transparent;
             }}
-            QPushButton#qualityHeader:hover {{
-                 background-color: {c['surface_alt']};
+            QTabWidget::tab-bar {{
+                alignment: left;
+            }}
+            QTabBar::tab {{
+                background: transparent;
+                color: {c['fg']};
+                padding: 8px 16px;
+                border-bottom: 2px solid transparent; 
+                font-weight: 600;
+                margin-right: 4px;
+            }}
+            QTabBar::tab:hover {{
+                background-color: {c['surface']};
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }}
+            QTabBar::tab:selected {{
+                color: {c['accent']};
+                border-bottom: 2px solid {c['accent']};
             }}
             
             /* Text */

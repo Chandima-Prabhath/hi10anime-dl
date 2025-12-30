@@ -8,7 +8,8 @@ from typing import Set, Dict, Optional, Any
 from PyQt6.QtWidgets import (
     QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, 
     QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox, QScrollArea, 
-    QHBoxLayout, QFrame, QGraphicsOpacityEffect, QSizePolicy, QGridLayout
+    QHBoxLayout, QFrame, QGraphicsOpacityEffect, QSizePolicy, QGridLayout,
+    QTabWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QTimer, QPoint, QRectF, QSize
 from PyQt6.QtGui import QIcon, QColor, QFont, QPainter, QPen, QBrush, QPixmap
@@ -60,7 +61,6 @@ class LoadingOverlay(QWidget):
              self.bg_color = QColor(255, 255, 255, 220)
         
         self.spinner_color = QColor(colors['spinner'])
-        # Ensure text is contrasting or just use theme fg
         self.text_label.setStyleSheet(f"color: {colors['fg']}; font-size: 16px; font-weight: bold; background: transparent;")
         self.update()
 
@@ -146,24 +146,20 @@ class ToastNotification(QFrame):
         self.anim.finished.connect(self.hide)
         self.anim.start()
 
-
-# --- New Widgets: Theme Toggle & Collapsible ---
-
 class ThemeToggle(QPushButton):
     def __init__(self, current_theme="Dark", parent=None):
         super().__init__(parent)
         self.setObjectName("themeToggle")
         self.setFixedSize(40, 40)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setIconSize(QSize(24, 24))
+        self.setIconSize(QSize(28, 28))
         self.update_icon(current_theme)
 
     def update_icon(self, theme):
-        # Resolve icon path
         base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
-        # Assuming icons are in app/icons relative to this file
         icon_dir = base_path / 'icons'
         
+        # User requested 100 size images
         if theme == "Dark":
             icon_path = icon_dir / 'toggle-on-100.png'
         else:
@@ -172,7 +168,7 @@ class ThemeToggle(QPushButton):
         if icon_path.exists():
             self.setIcon(QIcon(str(icon_path)))
         else:
-            self.setText("T") # Fallback
+            self.setText("T") 
 
 class CollapsibleBox(QWidget):
     def __init__(self, title="", parent=None):
@@ -250,12 +246,13 @@ class EpisodeCard(QFrame):
         
         copy_btn = QPushButton("Copy")
         copy_btn.setObjectName("secondaryBtn")
-        copy_btn.setFixedWidth(60)
+        copy_btn.setFixedWidth(80)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.clicked.connect(self.copy_link)
         
         open_btn = QPushButton("Open")
         open_btn.setObjectName("secondaryBtn")
-        open_btn.setFixedWidth(60)
+        open_btn.setFixedWidth(80)
         open_btn.clicked.connect(self.open_link)
         
         layout.addWidget(copy_btn)
@@ -269,6 +266,45 @@ class EpisodeCard(QFrame):
 
     def open_link(self):
         webbrowser.open(self.link)
+
+class QualityTab(QWidget):
+    def __init__(self, quality_name, episodes: list, parent_widget):
+        super().__init__()
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 10, 0, 10)
+        self.layout.setSpacing(5)
+        
+        # Action Bar inside Tab
+        action_bar = QHBoxLayout()
+        action_bar.setContentsMargins(5, 0, 5, 0)
+        
+        count_lbl = QLabel(f"{len(episodes)} Episodes")
+        count_lbl.setObjectName("smallText")
+        
+        copy_all_btn = QPushButton("Copy This Quality")
+        copy_all_btn.setObjectName("ghostBtn")
+        copy_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_all_btn.clicked.connect(lambda: self.copy_all(episodes, parent_widget))
+        
+        action_bar.addWidget(count_lbl)
+        action_bar.addStretch()
+        action_bar.addWidget(copy_all_btn)
+        
+        self.layout.addLayout(action_bar)
+        
+        for ep in episodes:
+            name = f"Episode {ep['episode']}"
+            if ep['episode'] in ["N/A", "Extras"] or ep.get('filename'):
+                name = ep.get('filename') or name
+            
+            card = EpisodeCard(name, ep['link'], ep['file_type'], parent_widget)
+            self.layout.addWidget(card)
+
+    def copy_all(self, episodes, parent):
+        links = [e['link'] for e in episodes]
+        cb = QApplication.clipboard()
+        cb.setText("\\n".join(links))
+        parent.show_toast(f"Copied {len(links)} links!")
 
 # --- App ---
 
@@ -477,6 +513,7 @@ class AnimeSearchApp(QMainWindow):
         self.links_screen.setup_links(title, links)
         self.stack.setCurrentWidget(self.links_screen)
 
+
 class LinksWidget(QWidget):
     def __init__(self, parent_app):
         super().__init__()
@@ -505,6 +542,7 @@ class LinksWidget(QWidget):
         tools_layout = QHBoxLayout()
         tools_layout.setSpacing(5)
         
+        # Collapse/Expand all applies to Seasons now
         expand_btn = QPushButton("Expand All")
         expand_btn.setObjectName("ghostBtn")
         expand_btn.clicked.connect(lambda: self.toggle_all(True))
@@ -556,51 +594,25 @@ class LinksWidget(QWidget):
             # Season Collapsible
             season_box = CollapsibleBox(f"  {season}  ")
             season_box.set_header_style("collageHeader")
+            season_box.toggle_button.setObjectName("collageHeader")
             self.collapsibles.append(season_box)
             
-            # Aggregate links for season copy if needed? Keep simple for now.
+            # Use TabWidget for Qualities
+            tabs = QTabWidget()
+            tabs.setDocumentMode(True)
             
-            # Inside Season: Quality Collapsibles
             for quality, episodes in qualities.items():
+                # Sort/Filter logic if needed
+                
+                # Add to all links cache
                 for ep in episodes:
                     self.all_links.append(ep['link'])
                 
-                q_links = [e['link'] for e in episodes]
-                q_title = f"{quality} ({len(episodes)} eps)"
-                
-                # Quality Box
-                quality_box = CollapsibleBox(q_title)
-                quality_box.set_header_style("qualityHeader")
-                
-                # Add "Copy Quality" btn to header? 
-                # CollapsibleBox needs custom header widget to support buttons inside it.
-                # Current implementation implies just a button toggle.
-                # Let's add a toolbar inside the content area top?
-                
-                # Content for quality
-                q_content = QWidget()
-                q_layout = QVBoxLayout(q_content)
-                q_layout.setContentsMargins(10, 5, 5, 5)
-                
-                # Copy Quality Button
-                copy_q_btn = QPushButton("Copy Section Links")
-                copy_q_btn.setObjectName("ghostBtn")
-                copy_q_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                copy_q_btn.clicked.connect(lambda checked, l=q_links: self.copy_list(l))
-                q_layout.addWidget(copy_q_btn)
-                
-                for ep in episodes:
-                    name = f"Episode {ep['episode']}"
-                    if ep['episode'] in ["N/A", "Extras"] or ep.get('filename'):
-                        name = ep.get('filename') or name
-                    
-                    card = EpisodeCard(name, ep['link'], ep['file_type'], self)
-                    q_layout.addWidget(card)
-                    
-                quality_box.add_widget(q_content)
-                season_box.add_widget(quality_box)
-                self.collapsibles.append(quality_box)
+                # Create Tab
+                tab_content = QualityTab(quality, episodes, self)
+                tabs.addTab(tab_content, quality)
             
+            season_box.add_widget(tabs)
             self.content_layout.addWidget(season_box)
 
     def toggle_all(self, state):
