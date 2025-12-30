@@ -1,4 +1,5 @@
 import sys
+import math
 from pathlib import Path
 import webbrowser
 import darkdetect
@@ -7,11 +8,10 @@ from typing import Set, Dict, Optional, Any
 from PyQt6.QtWidgets import (
     QApplication, QStackedWidget, QMainWindow, QVBoxLayout, QWidget, 
     QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox, QScrollArea, 
-    QTreeWidget, QTreeWidgetItem, QHBoxLayout, QFrame, QGraphicsOpacityEffect,
-    QSizePolicy, QProgressBar, QTreeWidgetItemIterator
+    QHBoxLayout, QFrame, QGraphicsOpacityEffect, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QTimer, QPoint
-from PyQt6.QtGui import QIcon, QColor, QFont
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QTimer, QPoint, QRectF, QSize
+from PyQt6.QtGui import QIcon, QColor, QFont, QPainter, QPen, QBrush, QPixmap
 
 from .client import Hi10AnimeClient
 from .proxy import ProxyService
@@ -19,11 +19,8 @@ from .parser import LinkParser
 from .styles import StyleSheet
 
 class WorkerThread(QThread):
-    """
-    Generic worker thread to run blocking tasks.
-    """
-    finished_signal = pyqtSignal(object)  # Emits the result
-    error_signal = pyqtSignal(str)        # Emits error message
+    finished_signal = pyqtSignal(object)
+    error_signal = pyqtSignal(str)
 
     def __init__(self, func, *args, **kwargs):
         super().__init__()
@@ -39,76 +36,82 @@ class WorkerThread(QThread):
             self.error_signal.emit(str(e))
 
 class LoadingOverlay(QWidget):
-    """
-    A semi-transparent overlay with a spinner/text to show loading state.
-    """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False) # block mouse
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.hide()
         
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.angle = 0
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.rotate)
         
-        self.card = QFrame()
-        self.card.setStyleSheet("background-color: rgba(30, 30, 46, 0.9); border-radius: 12px; padding: 20px;")
-        card_layout = QVBoxLayout(self.card)
+        self.text_label = QLabel("Loading...", self)
+        self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.text_label.setStyleSheet("font-size: 16px; font-weight: bold; background: transparent;")
         
-        self.spinner = QProgressBar()
-        self.spinner.setRange(0, 0) # Indeterminate mode
-        self.spinner.setFixedWidth(200)
-        self.spinner.setTextVisible(False)
-        self.spinner.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #45475a;
-                border-radius: 5px;
-                background-color: transparent;
-            }
-            QProgressBar::chunk {
-                background-color: #89b4fa;
-                width: 20px; 
-            }
-        """)
+        self.bg_color = QColor(0, 0, 0, 150)
+        self.spinner_color = QColor("#89b4fa")
 
-        self.label = QLabel("Loading...")
-        self.label.setStyleSheet("color: white; font-size: 16px; font-weight: bold; margin-top: 10px;")
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    def update_theme(self, theme):
+        colors = StyleSheet.get_colors(theme)
+        if theme == "Dark":
+            self.bg_color = QColor(30, 30, 46, 210)
+        else:
+             self.bg_color = QColor(255, 255, 255, 220)
+        
+        self.spinner_color = QColor(colors['spinner'])
+        # Ensure text is contrasting or just use theme fg
+        self.text_label.setStyleSheet(f"color: {colors['fg']}; font-size: 16px; font-weight: bold; background: transparent;")
+        self.update()
 
-        card_layout.addWidget(self.spinner)
-        card_layout.addWidget(self.label)
-        layout.addWidget(self.card)
+    def rotate(self):
+        self.angle = (self.angle + 10) % 360
+        self.update()
 
     def show_loading(self, text="Loading..."):
-        self.label.setText(text)
+        self.text_label.setText(text)
         self.resize(self.parent().size())
         self.show()
         self.raise_()
+        self.timer.start(30) 
 
     def stop(self):
+        self.timer.stop()
         self.hide()
 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), self.bg_color)
+        
+        size = 60
+        x = (self.width() - size) // 2
+        y = (self.height() - size) // 2 - 20
+        rect = QRectF(x, y, size, size)
+        
+        pen = QPen(self.spinner_color)
+        pen.setWidth(6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        
+        start_angle = -self.angle * 16
+        span_angle = 270 * 16
+        painter.drawArc(rect, start_angle, span_angle)
+        
+        self.text_label.setGeometry(0, y + size + 15, self.width(), 30)
+
 class ToastNotification(QFrame):
-    """
-    Non-intrusive popup notification.
-    """
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #313244; 
-                color: #cdd6f4; 
-                border-radius: 8px; 
-                border: 1px solid #45475a;
-                padding: 10px 20px;
-            }
-        """)
+        self.setObjectName("toastFrame")
+        
         self.label = QLabel(self)
-        self.label.setStyleSheet("border: none; background: transparent; color: #cdd6f4; font-weight: 600;")
+        self.label.setStyleSheet("border: none; background: transparent; font-weight: 600;")
         
         layout = QHBoxLayout(self)
         layout.addWidget(self.label)
-        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setContentsMargins(20, 10, 20, 10)
         
         self.opacity_effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.opacity_effect)
@@ -119,16 +122,17 @@ class ToastNotification(QFrame):
         self.timer.timeout.connect(self.fade_out)
         self.hide()
 
+    def update_theme(self, theme):
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def show_message(self, message, duration=2500):
         self.label.setText(message)
         self.adjustSize()
-        
-        # Position at bottom center
         parent_geo = self.parent().geometry()
         x = (parent_geo.width() - self.width()) // 2
-        y = parent_geo.height() - self.height() - 50
+        y = parent_geo.height() - self.height() - 60
         self.move(x, y)
-        
         self.show()
         self.raise_()
         self.opacity_effect.setOpacity(1.0)
@@ -142,29 +146,151 @@ class ToastNotification(QFrame):
         self.anim.finished.connect(self.hide)
         self.anim.start()
 
+
+# --- New Widgets: Theme Toggle & Collapsible ---
+
+class ThemeToggle(QPushButton):
+    def __init__(self, current_theme="Dark", parent=None):
+        super().__init__(parent)
+        self.setObjectName("themeToggle")
+        self.setFixedSize(40, 40)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setIconSize(QSize(24, 24))
+        self.update_icon(current_theme)
+
+    def update_icon(self, theme):
+        # Resolve icon path
+        base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+        # Assuming icons are in app/icons relative to this file
+        icon_dir = base_path / 'icons'
+        
+        if theme == "Dark":
+            icon_path = icon_dir / 'toggle-on-100.png'
+        else:
+            icon_path = icon_dir / 'toggle-off-100.png'
+            
+        if icon_path.exists():
+            self.setIcon(QIcon(str(icon_path)))
+        else:
+            self.setText("T") # Fallback
+
+class CollapsibleBox(QWidget):
+    def __init__(self, title="", parent=None):
+        super().__init__(parent)
+        self.toggle_button = QPushButton(f"▼ {title}") # Default expanded
+        self.toggle_button.setObjectName("collageHeader") # Default style
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(True) # Default expanded
+        
+        self.toggle_button.clicked.connect(self.on_pressed)
+
+        self.content_area = QWidget()
+        self.content_layout = QVBoxLayout(self.content_area)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
+        
+        # Main layout
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.addWidget(self.toggle_button)
+        self.main_layout.addWidget(self.content_area)
+
+    def set_header_style(self, style_name):
+        self.toggle_button.setObjectName(style_name)
+
+    def set_content_layout(self, layout):
+        pass
+        
+    def add_widget(self, widget):
+        self.content_layout.addWidget(widget)
+
+    def on_pressed(self):
+        checked = self.toggle_button.isChecked()
+        
+        arrow = "▼ " if checked else "▶ "
+        current_text = self.toggle_button.text()
+        clean_text = current_text.replace("▼ ", "").replace("▶ ", "").strip()
+        self.toggle_button.setText(f"{arrow}{clean_text}")
+        
+        self.content_area.setVisible(checked)
+
+    def toggle(self, state):
+        self.toggle_button.setChecked(state)
+        # Manually update text
+        arrow = "▼ " if state else "▶ "
+        current_text = self.toggle_button.text()
+        clean_text = current_text.replace("▼ ", "").replace("▶ ", "").strip()
+        self.toggle_button.setText(f"{arrow}{clean_text}")
+        
+        self.content_area.setVisible(state)
+
+# --- Link Widgets ---
+
+class EpisodeCard(QFrame):
+    def __init__(self, name, link, link_type, parent_widget):
+        super().__init__()
+        self.setObjectName("episodeCard")
+        self.link = link
+        self.parent_widget = parent_widget
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(10)
+        
+        name_lbl = QLabel(name)
+        name_lbl.setWordWrap(True)
+        layout.addWidget(name_lbl, 1)
+        
+        type_lbl = QLabel(link_type)
+        type_lbl.setObjectName("smallText")
+        type_lbl.setFixedWidth(60)
+        type_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(type_lbl)
+        
+        copy_btn = QPushButton("Copy")
+        copy_btn.setObjectName("secondaryBtn")
+        copy_btn.setFixedWidth(60)
+        copy_btn.clicked.connect(self.copy_link)
+        
+        open_btn = QPushButton("Open")
+        open_btn.setObjectName("secondaryBtn")
+        open_btn.setFixedWidth(60)
+        open_btn.clicked.connect(self.open_link)
+        
+        layout.addWidget(copy_btn)
+        layout.addWidget(open_btn)
+
+    def copy_link(self):
+        cb = QApplication.clipboard()
+        cb.setText(self.link)
+        if self.parent_widget:
+            self.parent_widget.show_toast("Link copied!")
+
+    def open_link(self):
+        webbrowser.open(self.link)
+
+# --- App ---
+
 class AnimeSearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Hi10Anime DL")
-        self.setGeometry(100, 100, 1000, 750)
+        self.setGeometry(100, 100, 1000, 800)
         
-        # Set Icon
         base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
         icon_path = base_path / 'app.ico'
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        # Theme Init
-        self.default_theme = "Dark" # Default to Dark for modern feel
+        self.default_theme = "Dark"
         if not darkdetect.isDark():
             self.default_theme = "Light" 
         self.current_theme = self.default_theme
 
-        # Data
         self.client = None
         self.worker = None
 
-        # UI Init
         self.setup_ui()
         self.apply_theme()
 
@@ -176,7 +302,6 @@ class AnimeSearchApp(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        # Content Stack
         self.stack = QStackedWidget()
         
         self.search_screen = QWidget()
@@ -189,7 +314,6 @@ class AnimeSearchApp(QMainWindow):
         
         self.main_layout.addWidget(self.stack)
 
-        # Overlays
         self.loading_overlay = LoadingOverlay(self.central_widget)
         self.toast = ToastNotification(self.central_widget)
 
@@ -206,21 +330,19 @@ class AnimeSearchApp(QMainWindow):
         self.header_label = QLabel("Hi10Anime DL")
         self.header_label.setObjectName("headerTitle")
         
-        self.theme_selector = QComboBox()
-        self.theme_selector.addItems(["Dark", "Light"])
-        self.theme_selector.setCurrentText(self.current_theme)
-        self.theme_selector.setFixedWidth(100)
-        self.theme_selector.currentTextChanged.connect(self.change_theme)
+        # Theme Toggle
+        self.theme_toggle = ThemeToggle(self.current_theme)
+        self.theme_toggle.clicked.connect(self.toggle_theme)
         
         header_layout.addWidget(self.header_label)
         header_layout.addStretch()
-        header_layout.addWidget(self.theme_selector)
+        header_layout.addWidget(self.theme_toggle)
         
         layout.addWidget(header_container)
 
-        # Search Bar Area
+        # Search Card
         search_card = QFrame()
-        search_card.setObjectName("resultCard") # Reusing card style
+        search_card.setObjectName("resultCard")
         search_layout = QHBoxLayout(search_card)
         search_layout.setContentsMargins(20, 20, 20, 20)
         
@@ -234,7 +356,6 @@ class AnimeSearchApp(QMainWindow):
         
         self.use_proxy_checkbox = QCheckBox("Use Proxy")
         self.use_proxy_checkbox.setChecked(True)
-        self.use_proxy_checkbox.setToolTip("Enable if you have connection issues")
 
         search_layout.addWidget(self.search_input)
         search_layout.addWidget(self.use_proxy_checkbox)
@@ -242,7 +363,7 @@ class AnimeSearchApp(QMainWindow):
         
         layout.addWidget(search_card)
 
-        # Results Area
+        # Results
         self.results_scroll = QScrollArea()
         self.results_scroll.setWidgetResizable(True)
         self.results_widget = QWidget()
@@ -255,16 +376,16 @@ class AnimeSearchApp(QMainWindow):
 
     def apply_theme(self):
         self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
-        # Pass theme down if needed to custom components, though Stylesheet handles most globally
+        self.loading_overlay.update_theme(self.current_theme)
+        self.toast.update_theme(self.current_theme)
+        if hasattr(self, 'theme_toggle'):
+            self.theme_toggle.update_icon(self.current_theme)
 
-    def change_theme(self, theme):
-        self.current_theme = theme
+    def toggle_theme(self):
+        self.current_theme = "Light" if self.current_theme == "Dark" else "Dark"
         self.apply_theme()
-        if hasattr(self, 'links_screen'):
-            self.links_screen.update_icons(theme)
 
     def resizeEvent(self, event):
-        # Resize overlay when window resizes
         if hasattr(self, 'loading_overlay'):
              self.loading_overlay.resize(self.central_widget.size())
         super().resizeEvent(event)
@@ -275,8 +396,6 @@ class AnimeSearchApp(QMainWindow):
             self.toast.show_message("Please enter a search term!")
             return
 
-        self.results_layout.removeWidget(self.results_widget) # Clear hack
-        # Proper clear
         while self.results_layout.count():
             child = self.results_layout.takeAt(0)
             if child.widget():
@@ -284,13 +403,8 @@ class AnimeSearchApp(QMainWindow):
 
         self.loading_overlay.show_loading(f"Searching for '{term}'...")
         
-        # Prepare Worker
         use_proxy = self.use_proxy_checkbox.isChecked()
         proxies = ProxyService.get_proxies(use_proxy)
-        
-        # If client not init or proxies changed, re-init. 
-        # For simplicity, we can just create a fresh client or re-use.
-        # Let's create a client wrapper function for the thread.
         
         self.worker = WorkerThread(self._search_task, term, proxies)
         self.worker.finished_signal.connect(self.on_search_finished)
@@ -298,11 +412,8 @@ class AnimeSearchApp(QMainWindow):
         self.worker.start()
 
     def _search_task(self, term, proxies):
-        # Initialize client here to run in thread? 
-        # Requests Session is not thread class friendly sometimes if shared, 
-        # but creating new one is fine.
         client = Hi10AnimeClient(proxies=proxies)
-        self.client = client # Cache it for later use (link fetching)
+        self.client = client
         return client.search(term)
 
     def on_search_finished(self, results):
@@ -335,33 +446,16 @@ class AnimeSearchApp(QMainWindow):
         layout = QHBoxLayout(card)
         layout.setContentsMargins(15, 15, 15, 15)
         
-        # Title
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold;")
         
         layout.addWidget(title_lbl)
         layout.addStretch()
         
-        # Icon
         arrow_lbl = QLabel("→")
-        arrow_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #89b4fa;") # Accent color
+        arrow_lbl.setStyleSheet("font-size: 20px; font-weight: bold;") 
         layout.addWidget(arrow_lbl)
 
-        # Make entire card clickable
-        # We can use an event filter or a transparent button on top, 
-        # or just mousePressEvent override if we subclass QFrame.
-        # Simpler: Button disguised as transparent overlay
-        # Or just a button inside. simpler to just use mouseRelease
-        
-        # Let's use a button overlay
-        overlay_btn = QPushButton(card)
-        overlay_btn.setStyleSheet("background: transparent; border: none;")
-        overlay_btn.resize(card.size()) # Initial size, needs resize event ideally
-        # Hack: layout ensures size? No overlay is absolute.
-        # Better: Standard button taking full space?
-        # Let's actually Just use a custom widget signal.
-        
-        # For valid Clickable frame:
         card.mouseReleaseEvent = lambda e: self.fetch_links(url, title)
         
         self.results_layout.addWidget(card)
@@ -383,16 +477,16 @@ class AnimeSearchApp(QMainWindow):
         self.links_screen.setup_links(title, links)
         self.stack.setCurrentWidget(self.links_screen)
 
-
 class LinksWidget(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent_app):
         super().__init__()
-        self.parent_app = parent
+        self.parent_app = parent_app
         self.setup_ui()
+        self.collapsibles = []
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(15)
 
         # Top Bar
@@ -407,120 +501,125 @@ class LinksWidget(QWidget):
         self.title_lbl.setObjectName("subTitle")
         self.title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        self.copy_all_btn = QPushButton("Copy All Links")
-        self.copy_all_btn.setFixedWidth(120)
-        self.copy_all_btn.clicked.connect(self.copy_all)
+        # Tools
+        tools_layout = QHBoxLayout()
+        tools_layout.setSpacing(5)
+        
+        expand_btn = QPushButton("Expand All")
+        expand_btn.setObjectName("ghostBtn")
+        expand_btn.clicked.connect(lambda: self.toggle_all(True))
+        
+        collapse_btn = QPushButton("Collapse All")
+        collapse_btn.setObjectName("ghostBtn")
+        collapse_btn.clicked.connect(lambda: self.toggle_all(False))
+
+        copy_all_btn = QPushButton("Copy ALL Links")
+        copy_all_btn.clicked.connect(self.copy_all)
+
+        tools_layout.addWidget(expand_btn)
+        tools_layout.addWidget(collapse_btn)
+        tools_layout.addWidget(copy_all_btn)
 
         top_bar.addWidget(self.back_btn)
-        top_bar.addWidget(self.title_lbl, 1) # stretch
-        top_bar.addWidget(self.copy_all_btn)
+        top_bar.addWidget(self.title_lbl, 1)
+        top_bar.addLayout(tools_layout)
         
         layout.addLayout(top_bar)
 
-        # Tree View
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["File Name / Episode", "Format", "Actions"])
-        # Set column widths
-        self.tree.setColumnWidth(0, 400)
-        self.tree.setColumnWidth(1, 100)
-        layout.addWidget(self.tree)
-
-    def update_icons(self, theme):
-        # Could update specific icons here if needed
-        pass
+        # Scroll Area
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.content_widget = QWidget()
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setSpacing(15)
+        self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        self.scroll.setWidget(self.content_widget)
+        layout.addWidget(self.scroll)
 
     def setup_links(self, title, links):
         self.title_lbl.setText(title)
-        self.tree.clear()
         
+        # Clear
+        while self.content_layout.count():
+            child = self.content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.collapsibles = []
         categorized = LinkParser.parse(links)
+        self.all_links = []
         
         for season, qualities in categorized.items():
-            season_item = QTreeWidgetItem(self.tree, [season])
-            season_item.setExpanded(True)
+            # Season Collapsible
+            season_box = CollapsibleBox(f"  {season}  ")
+            season_box.set_header_style("collageHeader")
+            self.collapsibles.append(season_box)
             
+            # Aggregate links for season copy if needed? Keep simple for now.
+            
+            # Inside Season: Quality Collapsibles
             for quality, episodes in qualities.items():
-                quality_item = QTreeWidgetItem(season_item, [quality])
-                quality_item.setExpanded(True)
+                for ep in episodes:
+                    self.all_links.append(ep['link'])
                 
-                # Copy All Quality Button (Cell Widget)
-                copy_q_btn = QPushButton("Copy Quality")
-                copy_q_btn.setObjectName("secondaryBtn")
-                copy_q_btn.setFixedSize(100, 24)
-                copy_q_btn.setStyleSheet("""
-                    QPushButton { padding: 0px 5px; font-size: 11px; }
-                """)
-                copy_q_btn.clicked.connect(lambda checked, eps=episodes: self.copy_list([e['link'] for e in eps]))
+                q_links = [e['link'] for e in episodes]
+                q_title = f"{quality} ({len(episodes)} eps)"
                 
-                # Container for button to center/align it
-                q_widget = QWidget()
-                q_layout = QHBoxLayout(q_widget)
-                q_layout.setContentsMargins(0,0,0,0)
-                q_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                # Quality Box
+                quality_box = CollapsibleBox(q_title)
+                quality_box.set_header_style("qualityHeader")
+                
+                # Add "Copy Quality" btn to header? 
+                # CollapsibleBox needs custom header widget to support buttons inside it.
+                # Current implementation implies just a button toggle.
+                # Let's add a toolbar inside the content area top?
+                
+                # Content for quality
+                q_content = QWidget()
+                q_layout = QVBoxLayout(q_content)
+                q_layout.setContentsMargins(10, 5, 5, 5)
+                
+                # Copy Quality Button
+                copy_q_btn = QPushButton("Copy Section Links")
+                copy_q_btn.setObjectName("ghostBtn")
+                copy_q_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                copy_q_btn.clicked.connect(lambda checked, l=q_links: self.copy_list(l))
                 q_layout.addWidget(copy_q_btn)
                 
-                self.tree.setItemWidget(quality_item, 2, q_widget)
+                for ep in episodes:
+                    name = f"Episode {ep['episode']}"
+                    if ep['episode'] in ["N/A", "Extras"] or ep.get('filename'):
+                        name = ep.get('filename') or name
+                    
+                    card = EpisodeCard(name, ep['link'], ep['file_type'], self)
+                    q_layout.addWidget(card)
+                    
+                quality_box.add_widget(q_content)
+                season_box.add_widget(quality_box)
+                self.collapsibles.append(quality_box)
+            
+            self.content_layout.addWidget(season_box)
 
-                for ep_data in episodes:
-                    name = f"Episode {ep_data['episode']}"
-                    if ep_data['episode'] in ["N/A", "Extras"] or ep_data.get('filename'):
-                        name = ep_data['filename'] if ep_data['filename'] else name
-                    
-                    link = ep_data['link']
-                    item = QTreeWidgetItem(quality_item, [name, ep_data['file_type']])
-                    item.setData(0, Qt.ItemDataRole.UserRole, link)
-                    
-                    # Actions
-                    actions_widget = QWidget()
-                    actions_layout = QHBoxLayout(actions_widget)
-                    actions_layout.setContentsMargins(0, 2, 0, 2)
-                    actions_layout.setSpacing(5)
-                    
-                    copy_btn = QPushButton("Copy")
-                    copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                    copy_btn.setFixedSize(60, 24)
-                    copy_btn.setStyleSheet("font-size: 11px; padding: 0;")
-                    copy_btn.clicked.connect(lambda checked, l=link: self.copy_one(l))
-                    
-                    open_btn = QPushButton("Open")
-                    open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                    open_btn.setObjectName("secondaryBtn")
-                    open_btn.setFixedSize(60, 24)
-                    open_btn.setStyleSheet("font-size: 11px; padding: 0;")
-                    open_btn.clicked.connect(lambda checked, l=link: webbrowser.open(l))
-                    
-                    actions_layout.addWidget(copy_btn)
-                    actions_layout.addWidget(open_btn)
-                    actions_layout.addStretch()
-                    
-                    self.tree.setItemWidget(item, 2, actions_widget)
+    def toggle_all(self, state):
+        for box in self.collapsibles:
+            box.toggle(state)
 
     def go_back(self):
         self.parent_app.stack.setCurrentWidget(self.parent_app.search_screen)
-
-    def copy_one(self, link):
-        cb = QApplication.clipboard()
-        cb.setText(link)
-        self.parent_app.toast.show_message("Link copied to clipboard!")
-
+        
+    def show_toast(self, msg):
+        self.parent_app.toast.show_message(msg)
+        
     def copy_list(self, links):
-        if not links: 
-            return
         cb = QApplication.clipboard()
-        cb.setText("\n".join(links))
-        self.parent_app.toast.show_message(f"Copied {len(links)} links!")
+        cb.setText("\\n".join(links))
+        self.show_toast(f"Copied {len(links)} links!")
 
     def copy_all(self):
-        urls = []
-        iterator = QTreeWidgetItemIterator(self.tree)
-        while iterator.value():
-            item = iterator.value()
-            link = item.data(0, Qt.ItemDataRole.UserRole)
-            if link:
-                urls.append(link)
-            iterator += 1
-            
-        if urls:
-            self.copy_list(urls)
+        if self.all_links:
+            self.copy_list(self.all_links)
         else:
-            self.parent_app.toast.show_message("No links to copy.")
+            self.show_toast("No links available.")
