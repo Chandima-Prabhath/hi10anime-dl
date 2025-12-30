@@ -24,6 +24,10 @@ def build():
         # Include the app.ico file as packaged data so it's available at runtime
         '--add-data',
         f'app.ico{os.pathsep}.',
+        '--add-data',
+        f'app.png{os.pathsep}.',
+        '--add-data',
+        f'app/icons{os.pathsep}icons',
         '--hidden-import', 'PyQt6.QtNetwork'
     ]
 

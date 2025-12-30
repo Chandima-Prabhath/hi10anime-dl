@@ -18,6 +18,8 @@ from .client import Hi10AnimeClient
 from .proxy import ProxyService
 from .parser import LinkParser
 from .styles import StyleSheet
+from .version import __version__
+from .updater import UpdateChecker
 
 class WorkerThread(QThread):
     finished_signal = pyqtSignal(object)
@@ -152,14 +154,13 @@ class ThemeToggle(QPushButton):
         self.setObjectName("themeToggle")
         self.setFixedSize(40, 40)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setIconSize(QSize(28, 28))
+        self.setIconSize(QSize(28, 28)) # Updated size
         self.update_icon(current_theme)
 
     def update_icon(self, theme):
         base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
         icon_dir = base_path / 'icons'
         
-        # User requested 100 size images
         if theme == "Dark":
             icon_path = icon_dir / 'toggle-on-100.png'
         else:
@@ -221,6 +222,39 @@ class CollapsibleBox(QWidget):
         
         self.content_area.setVisible(state)
 
+
+class UpdateBanner(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("updateBanner")
+        self.hide()
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        self.label = QLabel("New version available!")
+        self.label.setObjectName("updateText")
+        
+        self.btn = QPushButton("View Update")
+        self.btn.setObjectName("updateBtn")
+        self.btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn.clicked.connect(self.open_url)
+        
+        layout.addWidget(self.label)
+        layout.addStretch()
+        layout.addWidget(self.btn)
+        
+        self.url = ""
+
+    def show_update(self, version, url):
+        self.label.setText(f"Update Available: {version}")
+        self.url = url
+        self.show()
+
+    def open_url(self):
+        if self.url:
+            webbrowser.open(self.url)
+
 # --- Link Widgets ---
 
 class EpisodeCard(QFrame):
@@ -274,7 +308,6 @@ class QualityTab(QWidget):
         self.layout.setContentsMargins(0, 10, 0, 10)
         self.layout.setSpacing(5)
         
-        # Action Bar inside Tab
         action_bar = QHBoxLayout()
         action_bar.setContentsMargins(5, 0, 5, 0)
         
@@ -306,172 +339,77 @@ class QualityTab(QWidget):
         cb.setText("\\n".join(links))
         parent.show_toast(f"Copied {len(links)} links!")
 
-# --- App ---
+# --- App Screens ---
 
-class AnimeSearchApp(QMainWindow):
-    def __init__(self):
+class ResultsWidget(QWidget):
+    def __init__(self, parent_app):
         super().__init__()
-        self.setWindowTitle("Hi10Anime DL")
-        self.setGeometry(100, 100, 1000, 800)
-        
-        base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
-        icon_path = base_path / 'app.ico'
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
-
-        self.default_theme = "Dark"
-        if not darkdetect.isDark():
-            self.default_theme = "Light" 
-        self.current_theme = self.default_theme
-
-        self.client = None
-        self.worker = None
-
+        self.parent_app = parent_app
         self.setup_ui()
-        self.apply_theme()
 
     def setup_ui(self):
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
 
-        self.stack = QStackedWidget()
+        # Header (Back, Icon, Search, Theme)
+        header = QHBoxLayout()
         
-        self.search_screen = QWidget()
-        self.setup_search_screen()
+        self.back_btn = QPushButton("Back")
+        self.back_btn.setObjectName("secondaryBtn")
+        self.back_btn.setFixedWidth(80)
+        self.back_btn.clicked.connect(self.go_back_home)
         
-        self.links_screen = LinksWidget(self)
+        # Small Icon
+        icon_lbl = QLabel()
+        base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
+        icon_path = base_path / 'app.png'
+        if icon_path.exists():
+             icon_lbl.setPixmap(QPixmap(str(icon_path)).scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         
-        self.stack.addWidget(self.search_screen)
-        self.stack.addWidget(self.links_screen)
-        
-        self.main_layout.addWidget(self.stack)
-
-        self.loading_overlay = LoadingOverlay(self.central_widget)
-        self.toast = ToastNotification(self.central_widget)
-
-    def setup_search_screen(self):
-        layout = QVBoxLayout(self.search_screen)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(20)
-
-        # Header
-        header_container = QWidget()
-        header_layout = QHBoxLayout(header_container)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.header_label = QLabel("Hi10Anime DL")
-        self.header_label.setObjectName("headerTitle")
-        
-        # Theme Toggle
-        self.theme_toggle = ThemeToggle(self.current_theme)
-        self.theme_toggle.clicked.connect(self.toggle_theme)
-        
-        header_layout.addWidget(self.header_label)
-        header_layout.addStretch()
-        header_layout.addWidget(self.theme_toggle)
-        
-        layout.addWidget(header_container)
-
-        # Search Card
-        search_card = QFrame()
-        search_card.setObjectName("resultCard")
-        search_layout = QHBoxLayout(search_card)
-        search_layout.setContentsMargins(20, 20, 20, 20)
-        
+        # Search Bar
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search for anime... (e.g., 'One Piece')")
+        self.search_input.setPlaceholderText("Search...")
         self.search_input.returnPressed.connect(self.perform_search)
         
-        self.search_button = QPushButton("Search")
-        self.search_button.clicked.connect(self.perform_search)
-        self.search_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.search_btn = QPushButton("Search")
+        self.search_btn.clicked.connect(self.perform_search)
         
-        self.use_proxy_checkbox = QCheckBox("Use Proxy")
-        self.use_proxy_checkbox.setChecked(True)
-
-        search_layout.addWidget(self.search_input)
-        search_layout.addWidget(self.use_proxy_checkbox)
-        search_layout.addWidget(self.search_button)
+        header.addWidget(self.back_btn)
+        header.addWidget(icon_lbl)
+        header.addWidget(self.search_input, 1) # Expand
+        header.addWidget(self.search_btn)
         
-        layout.addWidget(search_card)
+        layout.addLayout(header)
 
-        # Results
+        # Results Area
         self.results_scroll = QScrollArea()
         self.results_scroll.setWidgetResizable(True)
+        self.results_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
         self.results_widget = QWidget()
         self.results_layout = QVBoxLayout(self.results_widget)
         self.results_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.results_layout.setSpacing(10)
+        self.results_layout.setSpacing(15)
         
         self.results_scroll.setWidget(self.results_widget)
         layout.addWidget(self.results_scroll)
 
-    def apply_theme(self):
-        self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
-        self.loading_overlay.update_theme(self.current_theme)
-        self.toast.update_theme(self.current_theme)
-        if hasattr(self, 'theme_toggle'):
-            self.theme_toggle.update_icon(self.current_theme)
-
-    def toggle_theme(self):
-        self.current_theme = "Light" if self.current_theme == "Dark" else "Dark"
-        self.apply_theme()
-
-    def resizeEvent(self, event):
-        if hasattr(self, 'loading_overlay'):
-             self.loading_overlay.resize(self.central_widget.size())
-        super().resizeEvent(event)
+    def go_back_home(self):
+        self.parent_app.show_home()
 
     def perform_search(self):
         term = self.search_input.text().strip()
-        if not term:
-            self.toast.show_message("Please enter a search term!")
-            return
+        if term:
+            self.parent_app.execute_search(term)
 
+    def clear_results(self):
         while self.results_layout.count():
             child = self.results_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        self.loading_overlay.show_loading(f"Searching for '{term}'...")
-        
-        use_proxy = self.use_proxy_checkbox.isChecked()
-        proxies = ProxyService.get_proxies(use_proxy)
-        
-        self.worker = WorkerThread(self._search_task, term, proxies)
-        self.worker.finished_signal.connect(self.on_search_finished)
-        self.worker.error_signal.connect(self.on_thread_error)
-        self.worker.start()
-
-    def _search_task(self, term, proxies):
-        client = Hi10AnimeClient(proxies=proxies)
-        self.client = client
-        return client.search(term)
-
-    def on_search_finished(self, results):
-        self.loading_overlay.stop()
-        if not results:
-            self.show_no_results()
-            return
-            
-        for result in results:
-            self.add_result_card(result)
-
-    def on_thread_error(self, error_msg):
-        self.loading_overlay.stop()
-        self.toast.show_message(f"Error: {error_msg}")
-
-    def show_no_results(self):
-        lbl = QLabel("No anime found. Try a different query.")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet("color: #888; font-size: 16px; margin-top: 20px;")
-        self.results_layout.addWidget(lbl)
-
-    def add_result_card(self, result):
+    def add_result(self, result):
         title = result.get('title', 'Unknown')
         url = result.get('url', '')
         
@@ -492,27 +430,9 @@ class AnimeSearchApp(QMainWindow):
         arrow_lbl.setStyleSheet("font-size: 20px; font-weight: bold;") 
         layout.addWidget(arrow_lbl)
 
-        card.mouseReleaseEvent = lambda e: self.fetch_links(url, title)
+        card.mouseReleaseEvent = lambda e: self.parent_app.fetch_links(url, title)
         
         self.results_layout.addWidget(card)
-
-    def fetch_links(self, url, title):
-        self.loading_overlay.show_loading(f"Fetching links for {title}...")
-        
-        self.worker = WorkerThread(self.client.get_download_links, url)
-        self.worker.finished_signal.connect(lambda links: self.on_links_fetched(links, title, url))
-        self.worker.error_signal.connect(self.on_thread_error)
-        self.worker.start()
-
-    def on_links_fetched(self, links, title, url):
-        self.loading_overlay.stop()
-        if not links:
-            self.toast.show_message("No download links found for this anime.")
-            return
-            
-        self.links_screen.setup_links(title, links)
-        self.stack.setCurrentWidget(self.links_screen)
-
 
 class LinksWidget(QWidget):
     def __init__(self, parent_app):
@@ -542,7 +462,6 @@ class LinksWidget(QWidget):
         tools_layout = QHBoxLayout()
         tools_layout.setSpacing(5)
         
-        # Collapse/Expand all applies to Seasons now
         expand_btn = QPushButton("Expand All")
         expand_btn.setObjectName("ghostBtn")
         expand_btn.clicked.connect(lambda: self.toggle_all(True))
@@ -580,7 +499,6 @@ class LinksWidget(QWidget):
     def setup_links(self, title, links):
         self.title_lbl.setText(title)
         
-        # Clear
         while self.content_layout.count():
             child = self.content_layout.takeAt(0)
             if child.widget():
@@ -591,24 +509,18 @@ class LinksWidget(QWidget):
         self.all_links = []
         
         for season, qualities in categorized.items():
-            # Season Collapsible
             season_box = CollapsibleBox(f"  {season}  ")
             season_box.set_header_style("collageHeader")
             season_box.toggle_button.setObjectName("collageHeader")
             self.collapsibles.append(season_box)
             
-            # Use TabWidget for Qualities
             tabs = QTabWidget()
             tabs.setDocumentMode(True)
             
             for quality, episodes in qualities.items():
-                # Sort/Filter logic if needed
-                
-                # Add to all links cache
                 for ep in episodes:
                     self.all_links.append(ep['link'])
                 
-                # Create Tab
                 tab_content = QualityTab(quality, episodes, self)
                 tabs.addTab(tab_content, quality)
             
@@ -620,7 +532,7 @@ class LinksWidget(QWidget):
             box.toggle(state)
 
     def go_back(self):
-        self.parent_app.stack.setCurrentWidget(self.parent_app.search_screen)
+        self.parent_app.stack.setCurrentWidget(self.parent_app.results_screen)
         
     def show_toast(self, msg):
         self.parent_app.toast.show_message(msg)
@@ -635,3 +547,207 @@ class LinksWidget(QWidget):
             self.copy_list(self.all_links)
         else:
             self.show_toast("No links available.")
+
+
+class AnimeSearchApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"Hi10Anime DL v{__version__}")
+        self.setGeometry(100, 100, 1000, 800)
+        
+        self.base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
+        icon_path = self.base_path / 'app.ico'
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        self.default_theme = "Dark"
+        if not darkdetect.isDark():
+            self.default_theme = "Light" 
+        self.current_theme = self.default_theme
+
+        self.client = None
+        self.worker = None
+
+        self.setup_ui()
+        self.apply_theme()
+        
+        QTimer.singleShot(1000, self.check_updates)
+
+    def setup_ui(self):
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        self.stack = QStackedWidget()
+        
+        self.home_screen = QWidget()
+        self.setup_home_screen()
+        
+        self.results_screen = ResultsWidget(self)
+        self.links_screen = LinksWidget(self)
+        
+        self.stack.addWidget(self.home_screen)
+        self.stack.addWidget(self.results_screen)
+        self.stack.addWidget(self.links_screen)
+        
+        self.main_layout.addWidget(self.stack)
+
+        self.loading_overlay = LoadingOverlay(self.central_widget)
+        self.toast = ToastNotification(self.central_widget)
+
+    def setup_home_screen(self):
+        layout = QVBoxLayout(self.home_screen)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(20)
+
+        # Top Right Controls
+        top_ctrl_layout = QHBoxLayout()
+        top_ctrl_layout.addStretch()
+        
+        self.theme_toggle = ThemeToggle(self.current_theme)
+        self.theme_toggle.clicked.connect(self.toggle_theme)
+        top_ctrl_layout.addWidget(self.theme_toggle)
+        
+        layout.addLayout(top_ctrl_layout)
+        layout.addStretch(1)
+
+        # Hero Content
+        hero_layout = QVBoxLayout()
+        hero_layout.setSpacing(20)
+        hero_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        logo_label = QLabel()
+        logo_path = self.base_path / 'app.png'
+        if logo_path.exists():
+            logo_label.setPixmap(QPixmap(str(logo_path)).scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hero_layout.addWidget(logo_label)
+        
+        ver_label = QLabel(f"v{__version__}")
+        ver_label.setObjectName("versionLabel")
+        ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hero_layout.addWidget(ver_label)
+        
+        search_card = QFrame()
+        search_card.setObjectName("heroSearchCard")
+        search_card.setFixedWidth(600) 
+        
+        search_layout = QHBoxLayout(search_card)
+        search_layout.setContentsMargins(20, 20, 20, 20)
+        
+        self.home_search_input = QLineEdit()
+        self.home_search_input.setPlaceholderText("Search for anime... (e.g., 'One Piece')")
+        self.home_search_input.returnPressed.connect(self.perform_home_search)
+        
+        search_btn = QPushButton("Search")
+        search_btn.clicked.connect(self.perform_home_search)
+        search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.use_proxy_checkbox = QCheckBox("Proxy")
+        self.use_proxy_checkbox.setChecked(True)
+
+        search_layout.addWidget(self.home_search_input)
+        search_layout.addWidget(self.use_proxy_checkbox)
+        search_layout.addWidget(search_btn)
+        
+        card_container = QWidget()
+        card_layout = QHBoxLayout(card_container)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.addStretch()
+        card_layout.addWidget(search_card)
+        card_layout.addStretch()
+        
+        hero_layout.addWidget(card_container)
+        
+        layout.addLayout(hero_layout)
+        layout.addStretch(1)
+        
+        self.update_banner = UpdateBanner()
+        layout.addWidget(self.update_banner)
+
+    def apply_theme(self):
+        self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
+        self.loading_overlay.update_theme(self.current_theme)
+        self.toast.update_theme(self.current_theme)
+        if hasattr(self, 'theme_toggle'):
+            self.theme_toggle.update_icon(self.current_theme)
+
+    def toggle_theme(self):
+        self.current_theme = "Light" if self.current_theme == "Dark" else "Dark"
+        self.apply_theme()
+        
+    def check_updates(self):
+        self.updater = UpdateChecker()
+        self.updater.update_available.connect(self.update_banner.show_update)
+        self.updater.start()
+
+    def resizeEvent(self, event):
+        if hasattr(self, 'loading_overlay'):
+             self.loading_overlay.resize(self.central_widget.size())
+        super().resizeEvent(event)
+
+    def show_home(self):
+        self.stack.setCurrentWidget(self.home_screen)
+
+    def perform_home_search(self):
+        term = self.home_search_input.text().strip()
+        if not term:
+            self.toast.show_message("Please enter a search term!")
+            return
+        self.execute_search(term)
+
+    def execute_search(self, term):
+        self.loading_overlay.show_loading(f"Searching for '{term}'...")
+        
+        # Switch to Results Screen
+        self.results_screen.search_input.setText(term)
+        self.stack.setCurrentWidget(self.results_screen)
+        
+        self.results_screen.clear_results()
+        
+        use_proxy = self.use_proxy_checkbox.isChecked() # Use main proxy setting or sync?
+        proxies = ProxyService.get_proxies(use_proxy)
+        
+        self.worker = WorkerThread(self._search_task, term, proxies)
+        self.worker.finished_signal.connect(self.on_search_finished)
+        self.worker.error_signal.connect(self.on_thread_error)
+        self.worker.start()
+
+    def _search_task(self, term, proxies):
+        client = Hi10AnimeClient(proxies=proxies)
+        self.client = client
+        return client.search(term)
+
+    def on_search_finished(self, results):
+        self.loading_overlay.stop()
+        if not results:
+            self.toast.show_message("No anime found.")
+            return
+            
+        for result in results:
+            self.results_screen.add_result(result)
+
+    def on_thread_error(self, error_msg):
+        self.loading_overlay.stop()
+        self.toast.show_message(f"Error: {error_msg}")
+        self.stack.setCurrentWidget(self.home_screen)
+
+    def fetch_links(self, url, title):
+        self.loading_overlay.show_loading(f"Fetching links for {title}...")
+        
+        self.worker = WorkerThread(self.client.get_download_links, url)
+        self.worker.finished_signal.connect(lambda links: self.on_links_fetched(links, title, url))
+        self.worker.error_signal.connect(self.on_thread_error)
+        self.worker.start()
+
+    def on_links_fetched(self, links, title, url):
+        self.loading_overlay.stop()
+        if not links:
+            self.toast.show_message("No download links found.")
+            return
+            
+        self.links_screen.setup_links(title, links)
+        self.stack.setCurrentWidget(self.links_screen)

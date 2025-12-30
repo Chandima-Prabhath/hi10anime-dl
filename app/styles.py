@@ -166,6 +166,44 @@ class StyleSheet:
                 background-color: {c['surface_alt']};
             }}
 
+
+
+            /* Hero Section */
+            QLabel#heroTitle {{
+                font-size: 32px;
+                font-weight: bold;
+                color: {c['fg']};
+            }}
+            QLabel#versionLabel {{
+                font-size: 14px;
+                color: {c['surface_alt'] if theme == 'Dark' else '#888'};
+                font-weight: 600;
+            }}
+            QFrame#heroSearchCard {{
+                background-color: {c['surface']};
+                border: 1px solid {c['border']};
+                border-radius: 16px;
+            }}
+            
+            /* Update Banner */
+            QFrame#updateBanner {{
+                background-color: {c['accent']};
+                border-radius: 8px;
+            }}
+            QLabel#updateText {{
+                color: #ffffff; /* Always white on accent */
+                font-weight: bold;
+                font-size: 14px;
+            }}
+            QPushButton#updateBtn {{
+                background-color: rgba(255, 255, 255, 0.2);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.4);
+            }}
+            QPushButton#updateBtn:hover {{
+                background-color: rgba(255, 255, 255, 0.3);
+            }}
+            
             /* Collapsible Header Style */
             QPushButton#collageHeader {{
                 text-align: left;
