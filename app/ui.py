@@ -626,7 +626,7 @@ class AnimeSearchApp(QMainWindow):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hero_layout.addWidget(logo_label)
         
-        ver_label = QLabel(f"v{__version__}")
+        ver_label = QLabel(f"v{__version__.lstrip('v')}")
         ver_label.setObjectName("versionLabel")
         ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hero_layout.addWidget(ver_label)
