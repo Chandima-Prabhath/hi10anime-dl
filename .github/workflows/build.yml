@@ -30,7 +30,7 @@ jobs:
       - name: Inject version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          echo "__version__ = '${{ github.ref_name }}'" > app/version.py
+          python -c "import os; v = '${{ github.ref_name }}'; open('app/version.py', 'w').write(f'__version__ = \"{v.lstrip(\"v\")}\"')"
 
       - name: Build executable
         run: python build.py

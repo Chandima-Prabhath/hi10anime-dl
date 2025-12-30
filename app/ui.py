@@ -552,7 +552,7 @@ class LinksWidget(QWidget):
 class AnimeSearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Hi10Anime DL v{__version__.lstrip('v')}")
+        self.setWindowTitle(f"Hi10Anime DL v{__version__}")
         self.setGeometry(100, 100, 1000, 800)
         
         self.base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
@@ -626,7 +626,7 @@ class AnimeSearchApp(QMainWindow):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hero_layout.addWidget(logo_label)
         
-        ver_label = QLabel(f"v{__version__.lstrip('v')}")
+        ver_label = QLabel(f"v{__version__}")
         ver_label.setObjectName("versionLabel")
         ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hero_layout.addWidget(ver_label)
