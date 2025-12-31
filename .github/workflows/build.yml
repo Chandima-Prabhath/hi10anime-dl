@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
+          cache: 'pip' # Caches dependencies to speed up future builds
 
       - name: Install dependencies
         run: |
@@ -24,20 +25,22 @@ jobs:
           pip install pyinstaller
 
       - name: Download and extract OpenSSL
+        # Simplified logic to ensure openssl.exe is in the 'openssl' directory
         run: |
           curl -L "https://downloads.sourceforge.net/project/openssl-for-windows/OpenSSL-1.1.1h_win32%28static%29%5BNo-GOST%5D.zip" -o openssl.zip
+          powershell Expand-Archive openssl.zip -DestinationPath openssl_temp
+          mkdir openssl
+          dir -r openssl_temp/openssl.exe | copy-item -Destination openssl/openssl.exe
 
       - name: Build executable
         run: python build.py
 
-      - name: Rename executable logic
-        run: |
-          cd dist
-          mv Hi10-DL.exe Hi10-DL-${{ github.ref_name }}.exe
-
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/Hi10-DL-${{ github.ref_name }}.exe
+          # Directly reference the generated file
+          files: dist/Hi10-DL.exe
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

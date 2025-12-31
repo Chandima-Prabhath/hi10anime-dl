@@ -3,9 +3,6 @@
   <!-- Logo -->
   <img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/app.png?raw=true" alt="Hi10Anime-DL Logo" width="200" style="border-radius: 50px;">
 
-  <!-- Title -->
-  # Hi10Anime-DL
-
   <!-- Badges -->
   [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
   [![PyQt6](https://img.shields.io/badge/PyQt6-Latest-green.svg)](https://pypi.org/project/PyQt6/)
