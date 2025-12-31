@@ -38,6 +38,7 @@
 *   **🔗 Direct Links:** Retrieve high-quality direct download links for episodes with a single click.
 *   **🌐 Proxy Support:** Built-in option to use system or environment proxies for seamless access.
 *   **🎨 Theme Support:** Easily toggle between Light and Dark modes to match your system preference.
+*   **📝 Debug Logging:** Automatically logs detailed information to help with troubleshooting.
 
 > **⚠️ Note:** Currently, this tool serves as a link generator. To download the actual video files, please use a third-party download manager like **IDM (Internet Download Manager)**.
 
@@ -99,6 +100,27 @@ If you prefer to run the source code or build the executable yourself, follow th
     ```bash
     python build.py
     ```
+
+---
+
+## 📁 Project Structure
+
+The project is organized into the following directories:
+
+*   `app/`: The core application code.
+    *   `app/screens/`: The main application screens (Home, Results, Links).
+    *   `app/widgets/`: Reusable UI components.
+    *   `app/client.py`: The client for interacting with the Hi10Anime website.
+    *   `app/config.py`: The configuration manager.
+    *   `app/logger.py`: The application logger.
+    *   `app/main.py`: The main entry point of the application.
+*   `logs/`: Contains the application's log files.
+*   `tests/`: Contains the application's tests.
+*   `images/`: Contains images used in the application and README.
+*   `config.json`: The application's configuration file.
+*   `requirements.txt`: The application's dependencies.
+*   `setup.py`: The application's setup script.
+*   `build.py`: The script for building the application executable.
 
 ---
 

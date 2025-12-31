@@ -33,6 +33,7 @@ def build():
         '--add-data', f'app.ico{os.pathsep}.',
         '--add-data', f'app.png{os.pathsep}.',
         '--add-data', f'app/icons{os.pathsep}icons',
+        '--add-data', f'config.json{os.pathsep}.',
         '--hidden-import', 'PyQt6.QtNetwork',
     ]
 
