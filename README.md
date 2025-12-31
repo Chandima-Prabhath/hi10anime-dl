@@ -21,11 +21,11 @@
 
 ---
 
-<!-- ## 📸 Preview
+## 📸 Preview
 
-<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/app.png?raw=true" alt="App Interface" width="800">
+<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/home.png?raw=true" alt="App Interface" width="800">
 
---- -->
+---
 
 ## ✨ Key Features
 
