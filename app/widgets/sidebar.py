@@ -19,16 +19,21 @@ class Sidebar(QWidget):
         self.layout.setContentsMargins(10, 20, 10, 20)
         self.layout.setSpacing(15)
 
-        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent.parent))
+        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 
         self.home_button = QPushButton()
-        self.downloads_button = QPushButton()
-        self.settings_button = QPushButton()
-        self.theme_toggle_button = QPushButton()
-
         self.home_button.setIcon(QIcon(str(base_path / "app" / "icons" / "home-100.png")))
+        self.home_button.setIconSize(QSize(32, 32))
+
+        self.downloads_button = QPushButton()
         self.downloads_button.setIcon(QIcon(str(base_path / "app" / "icons" / "downloads-100.png")))
+        self.downloads_button.setIconSize(QSize(32, 32))
+
+        self.settings_button = QPushButton()
         self.settings_button.setIcon(QIcon(str(base_path / "app" / "icons" / "settings-100.png")))
+        self.settings_button.setIconSize(QSize(32, 32))
+
+        self.theme_toggle_button = QPushButton()
 
         # Set object names for styling
         self.home_button.setObjectName("sidebarButton")
@@ -53,7 +58,7 @@ class Sidebar(QWidget):
 
     def update_theme_icon(self, theme):
         """Updates the theme toggle button's icon based on the current theme."""
-        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent.parent))
+        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
         if theme == "Dark":
             icon_path = base_path / "app" / "icons" / "toggle-on-100.png"
         else:
