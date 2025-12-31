@@ -1,10 +1,9 @@
 import PyInstaller.__main__
 import os
 import shutil
-import glob
 
 def build():
-    # Clean previous builds to ensure a fresh, lean executable
+    # Clean previous builds
     for folder in ['dist', 'build']:
         if os.path.exists(folder):
             shutil.rmtree(folder)
@@ -12,36 +11,33 @@ def build():
     if os.path.exists('Hi10-DL.spec'):
         os.remove('Hi10-DL.spec')
 
-    # Path to the UPX folder already present in your repo
+    # Path to the UPX folder in your repo
     upx_path = os.path.join(os.getcwd(), 'upx')
 
-    # Base PyInstaller command
     pyinstaller_command = [
         'setup.py',
         '--name=Hi10-DL',
         '--onefile',
         '--noconsole',
         '--icon=app.ico',
-        # Exclude heavy modules not typically used in this app to save space
+        # Restored 'email' because requests/urllib3 require it 
         '--exclude-module', 'tkinter',
         '--exclude-module', 'unittest',
         '--exclude-module', 'pydoc',
-        '--exclude-module', 'email',
-        '--exclude-module', 'http.server',
         '--exclude-module', 'test',
-        # Data files and icons
+        # Aggressively exclude large unused PyQt6 components
+        '--exclude-module', 'PyQt6.QtWebEngineCore',
+        '--exclude-module', 'PyQt6.QtWebEngineWidgets',
+        '--exclude-module', 'PyQt6.QtQuick',
+        '--exclude-module', 'PyQt6.QtQml',
         '--add-data', f'app.ico{os.pathsep}.',
         '--add-data', f'app.png{os.pathsep}.',
         '--add-data', f'app/icons{os.pathsep}icons',
         '--hidden-import', 'PyQt6.QtNetwork',
     ]
 
-    # Apply UPX compression using your local folder
     if os.path.exists(upx_path):
-        print(f"Applying UPX compression from: {upx_path}")
         pyinstaller_command.extend(['--upx-dir', upx_path])
-    else:
-        print("Warning: Local 'upx' folder not found. Skipping compression.")
 
     # OpenSSL binary handling
     openssl_path = os.path.join('openssl', 'openssl.exe')
