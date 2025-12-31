@@ -1,9 +1,8 @@
 import sys
 import logging
 from pathlib import Path
-import darkdetect
 
-from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QHBoxLayout, QWidget
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QIcon
 
@@ -14,10 +13,13 @@ from .version import __version__
 from .updater import UpdateChecker
 from .widgets.loading_overlay import LoadingOverlay
 from .widgets.toast_notification import ToastNotification
+from .widgets.sidebar import Sidebar
 from .screens.home_screen import HomeScreen
 from .screens.results_screen import ResultsWidget
 from .screens.links_screen import LinksWidget
-from .config import config
+from .screens.downloads_screen import DownloadsScreen
+from .screens.settings_screen import SettingsScreen
+from .settings import settings
 
 
 class WorkerThread(QThread):
@@ -59,7 +61,7 @@ class AnimeSearchApp(QMainWindow):
         """Initializes the main application window."""
         super().__init__()
         self.setWindowTitle(f"Hi10Anime DL v{__version__}")
-        self.setGeometry(100, 100, 1000, 800)
+        self.setGeometry(100, 100, 1150, 800)
 
         self.base_path = Path(
             getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)
@@ -68,11 +70,7 @@ class AnimeSearchApp(QMainWindow):
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
-        self.default_theme = config.get("theme.default", "Dark")
-        if not darkdetect.isDark():
-            self.default_theme = "Light"
-        self.current_theme = self.default_theme
-
+        self.current_theme = settings.get("theme", "Dark")
         self.client = None
         self.worker = None
 
@@ -86,21 +84,34 @@ class AnimeSearchApp(QMainWindow):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
 
-        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout = QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
+        self.sidebar = Sidebar()
+        self.main_layout.addWidget(self.sidebar)
+
         self.stack = QStackedWidget()
+        self.main_layout.addWidget(self.stack)
 
         self.home_screen = HomeScreen(self)
         self.results_screen = ResultsWidget(self)
         self.links_screen = LinksWidget(self)
+        self.downloads_screen = DownloadsScreen(self)
+        self.settings_screen = SettingsScreen(self)
+
 
         self.stack.addWidget(self.home_screen)
         self.stack.addWidget(self.results_screen)
         self.stack.addWidget(self.links_screen)
+        self.stack.addWidget(self.downloads_screen)
+        self.stack.addWidget(self.settings_screen)
 
-        self.main_layout.addWidget(self.stack)
+
+        self.sidebar.home_button_clicked.connect(self.show_home)
+        self.sidebar.downloads_button_clicked.connect(self.show_downloads)
+        self.sidebar.settings_button_clicked.connect(self.show_settings)
+        self.sidebar.theme_button_clicked.connect(self.toggle_theme)
 
         self.loading_overlay = LoadingOverlay(self.central_widget)
         self.toast = ToastNotification(self.central_widget)
@@ -110,12 +121,11 @@ class AnimeSearchApp(QMainWindow):
         self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
         self.loading_overlay.update_theme(self.current_theme)
         self.toast.update_theme(self.current_theme)
-        if hasattr(self.home_screen, "theme_toggle"):
-            self.home_screen.theme_toggle.update_icon(self.current_theme)
 
     def toggle_theme(self):
         """Toggles the application theme between light and dark."""
         self.current_theme = "Light" if self.current_theme == "Dark" else "Dark"
+        settings.set("theme", self.current_theme)
         logging.info(f"Toggling theme to {self.current_theme}.")
         self.apply_theme()
 
@@ -136,6 +146,14 @@ class AnimeSearchApp(QMainWindow):
     def show_home(self):
         """Switches the view to the home screen."""
         self.stack.setCurrentWidget(self.home_screen)
+
+    def show_downloads(self):
+        """Switches the view to the downloads screen."""
+        self.stack.setCurrentWidget(self.downloads_screen)
+
+    def show_settings(self):
+        """Switches the view to the settings screen."""
+        self.stack.setCurrentWidget(self.settings_screen)
 
     def execute_search(self, term):
         """Executes a search for a given term.
