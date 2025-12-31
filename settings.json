@@ -1,0 +1,10 @@
+{
+    "theme": "Dark",
+    "download_location": "D:/Downloads/AnimeDownloader",
+    "simultaneous_downloads": 3,
+    "download_parts": 32,
+    "proxy": {
+        "http": "",
+        "https": ""
+    }
+}
