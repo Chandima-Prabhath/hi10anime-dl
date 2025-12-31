@@ -1,8 +1,13 @@
 import sys
 import logging
+from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from PyQt6.QtWidgets import QApplication, QMessageBox
-from .app import AnimeSearchApp
-from .logger import setup_logger
+from app.app import AnimeSearchApp
+from app.logger import setup_logger
 
 
 def main():
