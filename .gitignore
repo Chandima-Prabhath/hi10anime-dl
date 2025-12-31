@@ -7,5 +7,7 @@ dist
 build
 Hi10-DL.spec
 setup.spec
-tests
+tests/verify_output.txt
+tests/downloads_test
 logs
+TODO.md
