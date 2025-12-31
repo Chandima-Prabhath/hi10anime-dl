@@ -32,7 +32,7 @@ class LoadingOverlay(QWidget):
 
         self.spinner_color = QColor(colors["spinner"])
         self.text_label.setStyleSheet(
-            f"color: {colors['fg']}; font-size: 16px; font-weight: bold; background: transparent;"
+            f"color: {colors['text_main']}; font-size: 16px; font-weight: bold; background: transparent;"
         )
         self.update()
 
