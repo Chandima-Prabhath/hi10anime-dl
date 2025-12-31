@@ -121,7 +121,6 @@ class StyleSheet:
                 border-radius: 12px;
             }}
             #quickCard:hover {{
-                transform: translateY(-4px);
                 border-color: {c['primary']};
             }}
             #quickCardIcon {{
