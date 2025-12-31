@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 from .episode_card import EpisodeCard
+from PyQt6.QtCore import Qt
 
 
 class QualityTab(QWidget):

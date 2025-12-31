@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QFrame, QLabel, QHBoxLayout
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QGraphicsOpacityEffect
+from PyQt6.QtWidgets import QGraphicsOpacityEffect
 
 
 class ToastNotification(QFrame):

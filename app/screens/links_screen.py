@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QApplication,
 )
+from PyQt6.QtCore import Qt
 from ..parser import LinkParser
 from ..widgets.collapsible_box import CollapsibleBox
 from ..widgets.quality_tab import QualityTab

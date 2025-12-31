@@ -46,7 +46,7 @@ class HomeScreen(QWidget):
 
         logo_label = QLabel()
         base_path = Path(
-            getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)
+            getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent.parent)
         )
         logo_path = base_path / "app.png"
         if logo_path.exists():

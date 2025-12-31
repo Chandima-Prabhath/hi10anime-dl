@@ -15,7 +15,7 @@ class ThemeToggle(QPushButton):
         self.update_icon(current_theme)
 
     def update_icon(self, theme):
-        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
         icon_dir = base_path / "icons"
 
         if theme == "Dark":
