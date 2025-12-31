@@ -63,7 +63,7 @@ class StyleSheet:
             }}
 
             /* --- Sidebar --- */
-            #sidebar {{
+            QWidget#sidebar {{
                 background-color: {c['bg_sidebar']};
                 border-right: 1px solid {c['border']};
             }}
