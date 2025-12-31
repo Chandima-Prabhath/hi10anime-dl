@@ -11,3 +11,4 @@ tests/verify_output.txt
 tests/downloads_test
 logs
 TODO.md
+settings.json
