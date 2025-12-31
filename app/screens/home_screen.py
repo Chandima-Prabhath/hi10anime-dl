@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QIcon, QFontDatabase
+from ..widgets.update_banner import UpdateBanner
 
 # A custom card widget for the home screen
 class QuickCard(QFrame):
@@ -64,7 +65,11 @@ class HomeScreen(QWidget):
 
         # 2. Main Content Area
         main_area = self._create_main_area()
-        main_layout.addWidget(main_area)
+        main_layout.addWidget(main_area, 1) # Add stretch factor
+
+        # 3. Update Banner
+        self.update_banner = UpdateBanner()
+        main_layout.addWidget(self.update_banner)
 
     def _create_top_nav(self):
         """Creates the top navigation bar with search and window controls."""
