@@ -170,9 +170,15 @@ class AnimeSearchApp(QMainWindow):
 
         self.results_screen.clear_results()
 
-        use_proxy = self.home_screen.use_proxy_checkbox.isChecked()
-        proxies = ProxyService.get_proxies(use_proxy)
-        logging.info(f"Using proxy: {use_proxy}")
+        http_proxy = settings.get("proxy.http")
+        https_proxy = settings.get("proxy.https")
+        proxies = {}
+        if http_proxy:
+            proxies["http"] = http_proxy
+        if https_proxy:
+            proxies["https"] = https_proxy
+
+        logging.info(f"Using proxies: {proxies}")
 
         self.worker = WorkerThread(self._search_task, term, proxies)
         self.worker.finished_signal.connect(self.on_search_finished)
