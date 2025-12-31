@@ -67,7 +67,7 @@ class StyleSheet:
                 background-color: {c['bg_sidebar']};
                 border-right: 1px solid {c['border']};
             }}
-            #sidebar QPushButton {{
+            #sidebar .QPushButton {{
                 color: {c['text_muted']};
                 background-color: transparent;
                 border: none;
@@ -75,11 +75,11 @@ class StyleSheet:
                 border-radius: 6px;
                 text-align: center;
             }}
-            #sidebar QPushButton:hover {{
-                background-color: rgba(128, 128, 128, 0.1);
+            #sidebar .QPushButton:hover {{
+                background-color: {c['bg_base']};
                 color: {c['text_main']};
             }}
-            #sidebar QPushButton:checked {{
+            #sidebar .QPushButton:checked {{
                 background-color: {c['primary']};
                 color: white;
             }}
