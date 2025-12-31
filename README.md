@@ -1,7 +1,7 @@
 <div align="center">
 
   <!-- Logo -->
-  <img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/logo_fullbody.jpg?raw=true" alt="Hi10Anime-DL Logo" width="200" style="border-radius: 50px;">
+  <img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/app.png?raw=true" alt="Hi10Anime-DL Logo" width="200" style="border-radius: 50px;">
 
   <!-- Title -->
   # Hi10Anime-DL
@@ -24,6 +24,14 @@
 ## 📸 Preview
 
 <img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/home.png?raw=true" alt="App Interface" width="800">
+
+<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/searching.png?raw=true" alt="App Searching Interface" width="800">
+
+<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/search-results.png?raw=true" alt="App Search Results Interface" width="800">
+
+<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/anime-page.png?raw=true" alt="App Anime Page Interface" width="800">
+
+<img src="https://github.com/Chandima-Prabhath/hi10anime-dl/blob/main/images/quality-tabs.png?raw=true" alt="App Quality Tabs Interface" width="800">
 
 ---
 
