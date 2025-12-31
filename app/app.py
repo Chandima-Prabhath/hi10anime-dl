@@ -121,6 +121,7 @@ class AnimeSearchApp(QMainWindow):
         self.setStyleSheet(StyleSheet.get_stylesheet(self.current_theme))
         self.loading_overlay.update_theme(self.current_theme)
         self.toast.update_theme(self.current_theme)
+        self.sidebar.update_theme_icon(self.current_theme)
 
     def toggle_theme(self):
         """Toggles the application theme between light and dark."""

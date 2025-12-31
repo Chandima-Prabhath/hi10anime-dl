@@ -1,7 +1,7 @@
 class StyleSheet:
     # --- DARK MODE ---
     DARK_BG_BASE = "#0f172a"
-    DARK_BG_SIDEBAR = "#1e293b"
+    DARK_BG_SIDEBAR = "#1a2233"
     DARK_BG_CARD = "#1e293b"
     DARK_PRIMARY = "#6366f1"
     DARK_PRIMARY_HOVER = "#4f46e5"
