@@ -65,7 +65,14 @@ urls = [
 "https://f005.backblazeb2.com/file/noro-27be5839/Shows/(Hi10)_Aharen_san_wa_Hakarenai_S2_(BD_1080p)/(Hi10)_Aharen_san_wa_Hakarenai_S2_-_05_(BD_1080p)_(Subsplease)_(24D21C54).mkv?jtoken=17d26554d7",
 "https://f005.backblazeb2.com/file/noro-27be5839/Shows/(Hi10)_Aharen_san_Hakarenai_(BD_1080p)/(Hi10)_Aharen_san_Hakarenai_-_10_(BD_1080p)_(Neo)_(0068549F).mkv?jtoken=17d26554d7",
 "https://f005.backblazeb2.com/file/noro-27be5839/Shows/(Hi10)_Aharen_san_Hakarenai_(BD_1080p)/(Hi10)_Aharen_san_Hakarenai_-_07_(BD_1080p)_(Neo)_(EE2FA65B).mkv?jtoken=17d26554d7",
-"https://f005.backblazeb2.com/file/noro-27be5839/Shows/(Hi10)_Aharen_san_Hakarenai_(BD_1080p)/(Hi10)_Aharen_san_Hakarenai_-_11_(BD_1080p)_(Neo)_(B21641C6).mkv?jtoken=17d26554d7"
+"https://f005.backblazeb2.com/file/noro-27be5839/Shows/(Hi10)_Aharen_san_Hakarenai_(BD_1080p)/(Hi10)_Aharen_san_Hakarenai_-_11_(BD_1080p)_(Neo)_(B21641C6).mkv?jtoken=17d26554d7",
+"https://sinbad.hi10anime.com/Playcool/Shows/[Hi10]_Tensei_Shitara_Slime_Datta_Ken_S2_[1080p]/(Hi10)_Tensei_Shitara_Slime_Datta_Ken_S2_-_01_(1080p)_(Asakura)_(9270F943).mkv?jtoken=17d26554d7",
+"https://sinbad.hi10anime.com/Playcool/Shows/[Hi10]_Tensei_Shitara_Slime_Datta_Ken_S2_[1080p]/(Hi10)_Tensei_Shitara_Slime_Datta_Ken_S2_-_02_(1080p)_(Asakura)_(CCF8C5D1).mkv?jtoken=17d26554d7",
+"https://sinbad.hi10anime.com/Playcool/Shows/[Hi10]_Tensei_Shitara_Slime_Datta_Ken_S2_[1080p]/(Hi10)_Tensei_Shitara_Slime_Datta_Ken_S2_-_03_(1080p)_(Asakura)_(1CE079BF).mkv?jtoken=17d26554d7",
+"https://sinbad.hi10anime.com/krome/[Hi10]_Kageki_Shoujo!!_[BD_720p]/(Hi10)_Kageki_Shoujo!!_-_01_(BD_720p)_(jsum)_(4083357B).mkv?jtoken=17d26554d7",
+"https://sinbad.hi10anime.com/krome/[Hi10]_Kageki_Shoujo!!_[BD_1080p]/(Hi10)_Kageki_Shoujo!!_-_01_(BD_1080p)_(jsum)_(C674E528).mkv?jtoken=17d26554d7",
+"https://masrur.hi10anime.com/ryuuzaki/[Hi10]_Gintama_[DVD_480p]/(Hi10)_Gintama_-_001-002_(480p)_(ShinsenSubs).mkv?jtoken=17d26554d7",
+"https://masrur.hi10anime.com/ryuuzaki/Movies/[Hi10]_Gintama_Movie_1_[BD_720p]/(Hi10)_Gintama_Movie_-_1_Benizakura_hen_(BD_720p)_(DAE).mkv?jtoken=17d26554d7"
 ]
 
 results = LinkParser.parse(set(urls))
