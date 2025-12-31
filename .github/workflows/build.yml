@@ -27,11 +27,6 @@ jobs:
         run: |
           curl -L "https://downloads.sourceforge.net/project/openssl-for-windows/OpenSSL-1.1.1h_win32%28static%29%5BNo-GOST%5D.zip" -o openssl.zip
 
-      - name: Inject version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          python -c "import os; v = '${{ github.ref_name }}'; open('app/version.py', 'w').write(f'__version__ = \"{v.lstrip(\"v\")}\"')"
-
       - name: Build executable
         run: python build.py
 
