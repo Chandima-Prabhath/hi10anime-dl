@@ -104,14 +104,14 @@ If you prefer to run the source code or build the executable yourself, follow th
 
 ## 📜 Changelog
 
-### [v1.0.0] - Optimized Release (2025-12-31)
+### [v0.4.6](https://github.com/Chandima-Prabhath/hi10anime-dl/releases/tag/v0.4.6) - Optimized Release (2025-12-31)
 *   **Maintainer:** [Chandima Prabhath](https://github.com/Chandima-Prabhath)
 *   ✨ Improved UI/UX for a smoother experience.
 *   🎨 Introduced new Logo and App Icon.
 *   🔄 Added Auto Version Update Check.
 *   🏗️ Laid the foundation for the integrated download manager (Experimental).
 
-### [v0.x.x] - Forked Release (2025-11-13)
+### Forked Release (2025-11-13)
 *   **Maintainer:** [Chandima Prabhath](https://github.com/Chandima-Prabhath)
 *   🍴 Forked from the original repository.
 
