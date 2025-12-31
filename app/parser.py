@@ -17,32 +17,31 @@ class LinkParser:
                 parts = decoded_link.split("/")
 
                 filename = parts[-1].split("?")[0]
-                file_ext = filename.rsplit(".", 1)[-1].upper() if "." in filename else ""
 
                 season = "Unknown Series"
                 quality = "Unknown"
                 episode = "N/A"
-                file_type = "File"
+                file_type = "MKV"
 
-                if file_ext == "TORRENT":
+                # Combine parts for easier parsing
+                full_path_str = "/".join(parts)
+
+                # Try to find quality in the full path
+                quality_match = re.search(r"[\(\[]((?:\d{3,4}p|BD|DVD|EXTRAS|SPECIALS|ONA|OVA)[\w\s_.-]*)[\)\]]", full_path_str, re.IGNORECASE)
+                if quality_match:
+                    quality = quality_match.group(1)
+
+                # Heuristic for season: Try to find a part of the path that looks like a season/show name
+                # This is tricky because of the variability. Let's try to find the directory that contains the quality.
+                season_match = re.search(r"/([^/]*?[\(\[]" + re.escape(quality) + r"[\)\]][^/]*)/", full_path_str, re.IGNORECASE)
+                if season_match:
+                    season = season_match.group(1)
+                    season = re.sub(r"[\(\[]" + re.escape(quality) + r"[\)\]]", "", season, flags=re.IGNORECASE).strip("_ ").strip()
+
+                if filename.endswith(".torrent"):
                     file_type = "Torrent"
-                    name_without_ext = filename.rsplit(".", 1)[0]
-                    quality_match = re.search(r"[\(\[]([^)\]]+)[\)\]]$", name_without_ext)
-                    if quality_match:
-                        quality = quality_match.group(1)
-                        season = re.sub(r"[\(\[][^)\]]+[\)\]]$", "", name_without_ext).strip("_ ").strip()
-                    else:
-                        season = name_without_ext
-                else:
-                    file_type = file_ext if file_ext else "File"
-                    if len(parts) > 2:
-                        dir_name = parts[-2]
-                        quality_match = re.search(r"[\(\[]([^)\]]+)[\)\]]$", dir_name)
-                        if quality_match:
-                            quality = quality_match.group(1)
-                            season = re.sub(r"[\(\[][^)\]]+[\)\]]$", "", dir_name).strip("_ ").strip()
-                        else:
-                            season = dir_name
+                    season = filename.rsplit(".", 1)[0]
+                    season = re.sub(r"[\(\[][^)\]]+[\)\]]$", "", season).strip("_ ").strip()
 
                 # Refine Episode Number from Filename
                 # Look for patterns like " - 01 ", " - 01", "_01_", " 01 "
