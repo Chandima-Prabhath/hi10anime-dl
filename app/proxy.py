@@ -1,9 +1,11 @@
 import os
+
 try:
     import winreg
 except ImportError:
     winreg = None
 from typing import Optional, Dict
+
 
 class ProxyService:
     @staticmethod
@@ -12,7 +14,7 @@ class ProxyService:
             try:
                 with winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+                    r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
                 ) as key:
                     if winreg.QueryValueEx(key, "ProxyEnable")[0]:
                         proxy = winreg.QueryValueEx(key, "ProxyServer")[0]
@@ -30,7 +32,7 @@ class ProxyService:
 
             env_proxies = {
                 "http": os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY"),
-                "https": os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
+                "https": os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY"),
             }
 
             if any(env_proxies.values()):

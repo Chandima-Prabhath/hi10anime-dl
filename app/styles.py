@@ -1,20 +1,20 @@
 class StyleSheet:
     # Modern Dark Palette
-    DARK_BG = "#1e1e2e"          # Catppuccin Mocha Base
-    DARK_FG = "#cdd6f4"          # Text
-    DARK_SURFACE = "#313244"     # Card bg
-    DARK_SURFACE_ALT = "#45475a" # Slightly lighter surface for distinction
-    DARK_ACCENT = "#89b4fa"      # Blue accent
+    DARK_BG = "#1e1e2e"  # Catppuccin Mocha Base
+    DARK_FG = "#cdd6f4"  # Text
+    DARK_SURFACE = "#313244"  # Card bg
+    DARK_SURFACE_ALT = "#45475a"  # Slightly lighter surface for distinction
+    DARK_ACCENT = "#89b4fa"  # Blue accent
     DARK_ACCENT_HOVER = "#b4befe"
     DARK_BORDER = "#45475a"
     DARK_OVERLAY = "rgba(30, 30, 46, 0.85)"
-    
+
     # Refined Light Palette - Softer & Warmer
-    LIGHT_BG = "#fefefe"         # Pure white / very slight offwhite
-    LIGHT_FG = "#2e3440"         # Dark Grey (Nord-ish) for high contrast
-    LIGHT_SURFACE = "#f0f4f8"    # Very light blue-grey for cards
+    LIGHT_BG = "#fefefe"  # Pure white / very slight offwhite
+    LIGHT_FG = "#2e3440"  # Dark Grey (Nord-ish) for high contrast
+    LIGHT_SURFACE = "#f0f4f8"  # Very light blue-grey for cards
     LIGHT_SURFACE_ALT = "#deeae8"
-    LIGHT_ACCENT = "#3b82f6"     # Bright Blue
+    LIGHT_ACCENT = "#3b82f6"  # Bright Blue
     LIGHT_ACCENT_HOVER = "#60a5fa"
     LIGHT_BORDER = "#cbd5e1"
     LIGHT_OVERLAY = "rgba(255, 255, 255, 0.9)"
@@ -31,7 +31,7 @@ class StyleSheet:
                 "accent_hover": StyleSheet.DARK_ACCENT_HOVER,
                 "border": StyleSheet.DARK_BORDER,
                 "overlay": StyleSheet.DARK_OVERLAY,
-                "spinner": "#89b4fa"
+                "spinner": "#89b4fa",
             }
         else:
             return {
@@ -43,7 +43,7 @@ class StyleSheet:
                 "accent_hover": StyleSheet.LIGHT_ACCENT_HOVER,
                 "border": StyleSheet.LIGHT_BORDER,
                 "overlay": StyleSheet.LIGHT_OVERLAY,
-                "spinner": "#3b82f6"
+                "spinner": "#3b82f6",
             }
 
     @staticmethod
