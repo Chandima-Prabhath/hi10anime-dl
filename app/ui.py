@@ -20,6 +20,9 @@ from .parser import LinkParser
 from .styles import StyleSheet
 from .version import __version__
 from .updater import UpdateChecker
+from .downloader import DownloadManager
+from .ui_downloads import DownloadsWidget, BatchSelectionDialog
+from .ui_settings import SettingsWidget
 
 class WorkerThread(QThread):
     finished_signal = pyqtSignal(object)
@@ -154,7 +157,7 @@ class ThemeToggle(QPushButton):
         self.setObjectName("themeToggle")
         self.setFixedSize(40, 40)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setIconSize(QSize(28, 28)) # Updated size
+        self.setIconSize(QSize(28, 28)) 
         self.update_icon(current_theme)
 
     def update_icon(self, theme):
@@ -174,10 +177,10 @@ class ThemeToggle(QPushButton):
 class CollapsibleBox(QWidget):
     def __init__(self, title="", parent=None):
         super().__init__(parent)
-        self.toggle_button = QPushButton(f"▼ {title}") # Default expanded
-        self.toggle_button.setObjectName("collageHeader") # Default style
+        self.toggle_button = QPushButton(f"▶ {title}") 
+        self.toggle_button.setObjectName("collageHeader") 
         self.toggle_button.setCheckable(True)
-        self.toggle_button.setChecked(True) # Default expanded
+        self.toggle_button.setChecked(False) 
         
         self.toggle_button.clicked.connect(self.on_pressed)
 
@@ -185,6 +188,7 @@ class CollapsibleBox(QWidget):
         self.content_layout = QVBoxLayout(self.content_area)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.setSpacing(0)
+        self.content_area.setVisible(False) 
         
         # Main layout
         self.main_layout = QVBoxLayout(self)
@@ -258,10 +262,13 @@ class UpdateBanner(QFrame):
 # --- Link Widgets ---
 
 class EpisodeCard(QFrame):
-    def __init__(self, name, link, link_type, parent_widget):
+    def __init__(self, name, link, link_type, parent_widget, anime_title, season_name):
         super().__init__()
         self.setObjectName("episodeCard")
         self.link = link
+        self.name = name
+        self.anime_title = anime_title
+        self.season_name = season_name
         self.parent_widget = parent_widget
         
         layout = QHBoxLayout(self)
@@ -284,13 +291,13 @@ class EpisodeCard(QFrame):
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.clicked.connect(self.copy_link)
         
-        open_btn = QPushButton("Open")
-        open_btn.setObjectName("secondaryBtn")
-        open_btn.setFixedWidth(80)
-        open_btn.clicked.connect(self.open_link)
+        dl_btn = QPushButton("Download")
+        dl_btn.setObjectName("secondaryBtn")
+        dl_btn.setFixedWidth(80)
+        dl_btn.clicked.connect(self.start_download)
         
         layout.addWidget(copy_btn)
-        layout.addWidget(open_btn)
+        layout.addWidget(dl_btn)
 
     def copy_link(self):
         cb = QApplication.clipboard()
@@ -298,11 +305,16 @@ class EpisodeCard(QFrame):
         if self.parent_widget:
             self.parent_widget.show_toast("Link copied!")
 
-    def open_link(self):
-        webbrowser.open(self.link)
+    def start_download(self):
+        mgr = DownloadManager()
+        # Clean filename 
+        filename = f"{self.name}.mp4" 
+        mgr.add_download(self.link, filename, self.anime_title, self.season_name)
+        self.parent_widget.show_toast("Added to download queue!")
+
 
 class QualityTab(QWidget):
-    def __init__(self, quality_name, episodes: list, parent_widget):
+    def __init__(self, quality_name, episodes: list, parent_widget, anime_title, season_name):
         super().__init__()
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 10, 0, 10)
@@ -314,13 +326,19 @@ class QualityTab(QWidget):
         count_lbl = QLabel(f"{len(episodes)} Episodes")
         count_lbl.setObjectName("smallText")
         
-        copy_all_btn = QPushButton("Copy This Quality")
+        dl_season_btn = QPushButton("Download Season")
+        dl_season_btn.setObjectName("primaryBtn")
+        dl_season_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        dl_season_btn.clicked.connect(lambda: self.download_season_dialog(episodes, anime_title, season_name))
+
+        copy_all_btn = QPushButton("Copy Links")
         copy_all_btn.setObjectName("ghostBtn")
         copy_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_all_btn.clicked.connect(lambda: self.copy_all(episodes, parent_widget))
         
         action_bar.addWidget(count_lbl)
         action_bar.addStretch()
+        action_bar.addWidget(dl_season_btn)
         action_bar.addWidget(copy_all_btn)
         
         self.layout.addLayout(action_bar)
@@ -330,7 +348,7 @@ class QualityTab(QWidget):
             if ep['episode'] in ["N/A", "Extras"] or ep.get('filename'):
                 name = ep.get('filename') or name
             
-            card = EpisodeCard(name, ep['link'], ep['file_type'], parent_widget)
+            card = EpisodeCard(name, ep['link'], ep['file_type'], parent_widget, anime_title, season_name)
             self.layout.addWidget(card)
 
     def copy_all(self, episodes, parent):
@@ -338,6 +356,26 @@ class QualityTab(QWidget):
         cb = QApplication.clipboard()
         cb.setText("\\n".join(links))
         parent.show_toast(f"Copied {len(links)} links!")
+
+    def download_season_dialog(self, episodes, anime_title, season_name):
+        dialog = BatchSelectionDialog(episodes, self)
+        if dialog.exec():
+            selected = dialog.get_selected_episodes()
+            mgr = DownloadManager()
+            count = 0
+            for ep in selected:
+                name = f"Episode {ep['episode']}"
+                if ep.get('filename'):
+                    name = ep.get('filename')
+                filename = f"{name}.mp4"
+                mgr.add_download(ep['link'], filename, anime_title, season_name)
+                count += 1
+            
+            if count > 0:
+                # Find parent widget to show toast
+                p = self.window()
+                if hasattr(p, "show_toast"):
+                    p.show_toast(f"Added {count} episodes to queue!")
 
 # --- App Screens ---
 
@@ -440,6 +478,7 @@ class LinksWidget(QWidget):
         self.parent_app = parent_app
         self.setup_ui()
         self.collapsibles = []
+        self.anime_title = ""
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -498,6 +537,7 @@ class LinksWidget(QWidget):
 
     def setup_links(self, title, links):
         self.title_lbl.setText(title)
+        self.anime_title = title
         
         while self.content_layout.count():
             child = self.content_layout.takeAt(0)
@@ -521,7 +561,7 @@ class LinksWidget(QWidget):
                 for ep in episodes:
                     self.all_links.append(ep['link'])
                 
-                tab_content = QualityTab(quality, episodes, self)
+                tab_content = QualityTab(quality, episodes, self, self.anime_title, season)
                 tabs.addTab(tab_content, quality)
             
             season_box.add_widget(tabs)
@@ -535,7 +575,8 @@ class LinksWidget(QWidget):
         self.parent_app.stack.setCurrentWidget(self.parent_app.results_screen)
         
     def show_toast(self, msg):
-        self.parent_app.toast.show_message(msg)
+        # We need to bubble this to parent_app because parent_app handles the toast
+        self.parent_app.show_toast(msg)
         
     def copy_list(self, links):
         cb = QApplication.clipboard()
@@ -549,11 +590,33 @@ class LinksWidget(QWidget):
             self.show_toast("No links available.")
 
 
+class InternalNavWidget(QWidget):
+    """Holds the Home -> Results -> Links navigation stack"""
+    def __init__(self, parent_app):
+        super().__init__()
+        self.parent_app = parent_app
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0,0,0,0)
+        
+        self.stack = QStackedWidget()
+        
+        self.home_screen = QWidget()
+        self.parent_app.setup_home_screen(self.home_screen)
+        
+        self.results_screen = ResultsWidget(self.parent_app)
+        self.links_screen = LinksWidget(self.parent_app)
+        
+        self.stack.addWidget(self.home_screen)
+        self.stack.addWidget(self.results_screen)
+        self.stack.addWidget(self.links_screen)
+        
+        self.layout.addWidget(self.stack)
+
 class AnimeSearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"Hi10Anime DL v{__version__}")
-        self.setGeometry(100, 100, 1000, 800)
+        self.setGeometry(100, 100, 1100, 800)
         
         self.base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent))
         icon_path = self.base_path / 'app.ico'
@@ -580,26 +643,36 @@ class AnimeSearchApp(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
-
-        self.stack = QStackedWidget()
         
-        self.home_screen = QWidget()
-        self.setup_home_screen()
+        # Main Tab Widget
+        self.main_tabs = QTabWidget()
+        self.main_tabs.setTabPosition(QTabWidget.TabPosition.West)
+        self.main_tabs.setIconSize(QSize(32, 32))
         
-        self.results_screen = ResultsWidget(self)
-        self.links_screen = LinksWidget(self)
+        # 1. Home Tab (Stack)
+        self.nav_widget = InternalNavWidget(self)
+        self.stack = self.nav_widget.stack 
+        self.home_screen = self.nav_widget.home_screen
+        self.results_screen = self.nav_widget.results_screen
+        self.links_screen = self.nav_widget.links_screen
         
-        self.stack.addWidget(self.home_screen)
-        self.stack.addWidget(self.results_screen)
-        self.stack.addWidget(self.links_screen)
+        # 2. Downloads Tab
+        self.downloads_widget = DownloadsWidget(self)
         
-        self.main_layout.addWidget(self.stack)
+        # 3. Settings Tab
+        self.settings_widget = SettingsWidget(self)
+        
+        self.main_tabs.addTab(self.nav_widget, "Home")
+        self.main_tabs.addTab(self.downloads_widget, "Downloads")
+        self.main_tabs.addTab(self.settings_widget, "Settings")
+        
+        self.main_layout.addWidget(self.main_tabs)
 
         self.loading_overlay = LoadingOverlay(self.central_widget)
         self.toast = ToastNotification(self.central_widget)
 
-    def setup_home_screen(self):
-        layout = QVBoxLayout(self.home_screen)
+    def setup_home_screen(self, parent_widget):
+        layout = QVBoxLayout(parent_widget)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
 
@@ -692,10 +765,13 @@ class AnimeSearchApp(QMainWindow):
     def show_home(self):
         self.stack.setCurrentWidget(self.home_screen)
 
+    def show_toast(self, msg):
+        self.toast.show_message(msg)
+
     def perform_home_search(self):
         term = self.home_search_input.text().strip()
         if not term:
-            self.toast.show_message("Please enter a search term!")
+            self.show_toast("Please enter a search term!")
             return
         self.execute_search(term)
 
@@ -708,7 +784,7 @@ class AnimeSearchApp(QMainWindow):
         
         self.results_screen.clear_results()
         
-        use_proxy = self.use_proxy_checkbox.isChecked() # Use main proxy setting or sync?
+        use_proxy = self.use_proxy_checkbox.isChecked() 
         proxies = ProxyService.get_proxies(use_proxy)
         
         self.worker = WorkerThread(self._search_task, term, proxies)
@@ -724,7 +800,7 @@ class AnimeSearchApp(QMainWindow):
     def on_search_finished(self, results):
         self.loading_overlay.stop()
         if not results:
-            self.toast.show_message("No anime found.")
+            self.show_toast("No anime found.")
             return
             
         for result in results:
@@ -732,7 +808,7 @@ class AnimeSearchApp(QMainWindow):
 
     def on_thread_error(self, error_msg):
         self.loading_overlay.stop()
-        self.toast.show_message(f"Error: {error_msg}")
+        self.show_toast(f"Error: {error_msg}")
         self.stack.setCurrentWidget(self.home_screen)
 
     def fetch_links(self, url, title):
@@ -746,7 +822,7 @@ class AnimeSearchApp(QMainWindow):
     def on_links_fetched(self, links, title, url):
         self.loading_overlay.stop()
         if not links:
-            self.toast.show_message("No download links found.")
+            self.show_toast("No download links found.")
             return
             
         self.links_screen.setup_links(title, links)
