@@ -55,6 +55,7 @@ class Sidebar(QWidget):
         self.layout.addWidget(self.theme_toggle_button)
 
         self.setObjectName("sidebar")
+        self.setAutoFillBackground(True)
 
     def update_theme_icon(self, theme):
         """Updates the theme toggle button's icon based on the current theme."""
